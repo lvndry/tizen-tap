@@ -1,0 +1,19 @@
+{
+    "schemaVersion": 1,
+    "package": "archive-root-0000000000000001",
+    "stagingRoot": "/home/owner/share/tmp/sdk_tools",
+    "staging": "/home/owner/share/tmp/sdk_tools/archive-root-0000000000000001",
+    "callbackHost": "127.0.0.1",
+    "callbackPort": 8092,
+    "files": {
+        "SamsungTvArchiveRoot.dll": 9216,
+        "SamsungTvArchiveRoot.runtimeconfig.json": 140,
+        "SamsungTvRootAgent.dll": 18944,
+        "SamsungTvRootAgent.runtimeconfig.json": 140,
+        "public.pem": 451,
+        "passwd": 37,
+        "root-agent.token": 44,
+        "archive-root-0000000000000001.tar.gz": 480,
+        "archive-root-0000000000000001.tar.gz.signature": 256
+    }
+}

@@ -23,7 +23,8 @@ const APP = {
         'config.xml',
         'icon.png',
         'ui/dist',
-        'service/dist'
+        'service/dist',
+        'service/vendor'
     ]
 };
 

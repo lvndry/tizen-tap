@@ -35,7 +35,8 @@
     "version": "node tools/version.js",
     "version:check": "node tools/version.js --check",
     "version:set": "node tools/version.js --set",
-    "typecheck": "npm run typecheck --workspace service && npm run typecheck --workspace ui"
+    "typecheck": "npm run typecheck --workspace service && npm run typecheck --workspace ui",
+    "rootarm": "node tools/root-arm-build.js"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

@@ -49,6 +49,9 @@ const install = require('./routes/install.ts');
 const lifecycle = require('./routes/lifecycle.ts');
 const dev = require('./routes/dev.ts');
 const ui = require('./routes/ui.ts');
+const rootRoutes = require('./routes/root.ts');
+const { RootChannel } = require('./root/channel.ts');
+const rootArm = require('./root/arm.ts');
 
 const { ErrorCode } = protocol;
 
@@ -316,6 +319,17 @@ const start = () => {
         authorise
     };
 
+    const channelManifest = rootArm.manifest();
+    const channel = new RootChannel({
+        host: channelManifest.callbackHost, port: channelManifest.callbackPort,
+        secret: require('fs').readFileSync(require('path').join(rootArm.VENDOR, 'root-agent.token'), 'utf8').trim(),
+        log: (line) => svc.info(line)
+    });
+
+    const root = { channel, arming: false };
+    ctx.root = root;
+    ctx.rootArm = (sdbClient, channel, logFn) => rootArm.arm(sdbClient, channel, logFn);
+
     const router = createRouter({
         log,
         quiet: (request, path) =>
@@ -326,6 +340,7 @@ const start = () => {
     status.register(ctx, router);
     install.register(ctx, router);
     lifecycle.register(ctx, router);
+    rootRoutes.register(ctx, router);
 
     if (DEVELOPER) {
         const { createRepl } = require('./dev/repl.ts');
@@ -367,6 +382,29 @@ const start = () => {
 
         svc.ok(`startup finished in ${took(recorded.uptime())}`);
     });
+
+    channel.start().catch((error) => svc.err(`root channel: ${error.message}`));
+
+    // Arm root once the sdb probe has settled: stage the payloads, fire the
+    // injection, and let the agent dial back in. Idempotent, so a failed
+    // attempt is retried a few times; /dev/root/arm remains manual after.
+    if (device.onTv) {
+        setTimeout(() => {
+            const tryArm = (attemptsLeft) => {
+                if (root.channel.status().root) return;
+
+                root.arming = true;
+                rootArm.arm(sdb, root.channel, (line) => svc.info(line)).then(() => {
+                    root.arming = false;
+                }).catch((error) => {
+                    root.arming = false;
+                    svc.warn(`root arm: ${error.message}`);
+                    if (attemptsLeft > 0) setTimeout(() => tryArm(attemptsLeft - 1), 30000);
+                });
+            };
+            tryArm(5);
+        }, 15000);
+    }
 
     sockets = require('./socket.ts').attach({
         server, store, secret, authorise, installer, catalog, updates, relay, refreshDevice,

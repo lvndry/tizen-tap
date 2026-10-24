@@ -58,6 +58,14 @@ node remote.js power home ok up down left right volumeUp mute
 | `POST /install` | install a `.wgt` (body), the universal verb |
 | `POST /restart` | the service self-heals in ~5s, nothing else needed |
 | `POST /dev/eval`, `/dev/sdb`, `/dev/shell` | dev builds only — raw access |
+| `POST /dev/root/exec` | run a line of `/bin/sh` as uid 0 (PIN-gated) |
+| `GET /dev/root`, `POST /dev/root/arm` | root channel state / re-arm it |
+
+The root channel arms itself on boot: the service fires a sdb injection that
+runs the signed agent under sdbd's privileges, and the agent dials back over
+loopback — while that socket is open, `POST /dev/root/exec` is a root shell.
+It re-arms after every power cycle; if it is not connected, call
+`POST /dev/root/arm` (PIN-gated). See [docs/sdbd-and-root.md](docs/sdbd-and-root.md).
 
 A 403 means the PIN is wrong or rotated; `GET /pin` (from the TV itself) or the
 PIN relay is how you get the current one. Five wrong guesses lock pairing for

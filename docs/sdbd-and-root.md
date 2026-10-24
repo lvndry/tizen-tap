@@ -83,8 +83,22 @@ buxton2ctl set-int32  system db/sdk/develop/mode 1
 systemctl restart sdbd
 ```
 
-Root is **volatile** (cleared on reboot/OTA); persistence comes from a
-partner-cert boot agent that re-runs the route over loopback sdb at boot.
+The service now carries this route itself ("the root channel"):
+
+- `tools/root-arm-build.js` (`npm run rootarm`) stages the samsung-tv-root
+  payloads into `service/vendor/root-arm/` — the launcher and agent DLLs,
+a fresh RSA-2048 keypair (only the public key ships), the signed tar that
+  `sdbd-tarlauncher` runs as uid 0, and the channel's HMAC secret. Output is
+  committed, so the TV only ever copies files.
+- On boot the service fires the injection over loopback sdb, and the agent
+  dials back to the service's root channel on loopback `:8092`. While that
+  socket is open, `POST /dev/root/exec` (PIN-gated) runs a line of `/bin/sh`
+as uid 0. `GET /dev/root` reports state; `POST /dev/root/arm` re-arms.
+- Root stays **volatile across power cycles** — the channel re-arms
+  automatically at the next service start, with a few retries, and the
+  manual endpoint as fallback. A partner-cert boot agent would make the
+  service itself start at boot deterministically, which the root channel
+  still depends on.
 
 ## Running the tool on an arm64 Mac
 
