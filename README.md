@@ -183,10 +183,10 @@ OpenTUI, compiled to one binary per platform. It calls `tools/` and
 implementation each.
 
 ---
-Started from [SushyDev/tizen-homebrew](https://github.com/SushyDev/tizen-homebrew)
-and grown into something with an actual spine. Licensed GPL-3.0-only, on the
-work in the credits screen — the Homebrew Channel, TizenBrew, TizenTube, and
-the people who worked out what a Samsung TV will and will not allow.
+Thanks to [SushyDev/tizen-homebrew](https://github.com/SushyDev/tizen-homebrew)
+for inspiring this, and to the people behind the Homebrew Channel, TizenBrew
+and TizenTube — the credits screen lists the rest — who worked out what a
+Samsung TV will and will not allow. Licensed GPL-3.0-only.
 
 **Not affiliated with Samsung.** This project is not created, sponsored, or
 endorsed by Samsung Electronics. Samsung, Tizen, sdb and related names are
