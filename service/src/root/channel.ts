@@ -29,7 +29,7 @@ interface RootIdentity {
 class RootChannel {
     private host: string;
     private port: number;
-    private secret: string;
+    private secret: string | Buffer;
     private log: (line: string) => void;
     private server: ReturnType<typeof net.createServer> | null;
     private socket: any;
@@ -39,7 +39,7 @@ class RootChannel {
     private pending: Map<number, { resolve: (value: any) => void; reject: (error: Error) => void; timer: any }>;
     private connected = false;
 
-    constructor({ host = '127.0.0.1', port, secret, log }: { host?: string; port: number; secret: string; log?: (line: string) => void } = {} as any) {
+    constructor({ host = '127.0.0.1', port, secret, log }: { host?: string; port: number; secret: string | Buffer; log?: (line: string) => void } = {} as any) {
         if (!secret || secret.length < MINIMUM_SECRET_BYTES) {
             throw new ProtocolError('root secret must be at least 32 bytes');
         }

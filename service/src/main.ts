@@ -320,9 +320,17 @@ const start = () => {
     };
 
     const channelManifest = rootArm.manifest();
+    // The token file is the base64 form of the key; the C# agent does
+    // Convert.FromBase64String on it, so the channel must use the decoded
+    // bytes or every frame fails to authenticate.
+    const channelSecret = require('fs')
+        .readFileSync(require('path').join(rootArm.VENDOR, 'root-agent.token'), 'utf8')
+        .trim();
     const channel = new RootChannel({
         host: channelManifest.callbackHost, port: channelManifest.callbackPort,
-        secret: require('fs').readFileSync(require('path').join(rootArm.VENDOR, 'root-agent.token'), 'utf8').trim(),
+        // A Buffer, not a string: createHmac would re-encode a string as utf8
+        // and corrupt any high bytes of the key.
+        secret: Buffer.from(channelSecret, 'base64'),
         log: (line) => svc.info(line)
     });
 
