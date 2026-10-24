@@ -24,7 +24,7 @@ const APP = {
         'icon.png',
         'ui/dist',
         'service/dist',
-        'service/vendor'
+        'vendor'
     ]
 };
 

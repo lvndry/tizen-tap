@@ -55,7 +55,7 @@ function openssl(args, { binary = false } = {}) {
 
 function main() {
     const source = process.env.SAMSUNG_TV_ROOT || join(process.env.HOME, 'github', 'samsung-tv-root');
-    const outDir = join(__dirname, '..', 'service', 'vendor', 'root-arm');
+    const outDir = join(__dirname, '..', 'vendor', 'root-arm');
 
     for (const name of ['SamsungTvArchiveRoot.dll', 'SamsungTvRootAgent.dll']) {
         const from = join(source, 'payloads', 'common', 'out', name);
@@ -167,7 +167,7 @@ function main() {
         })
     }, null, 4) + '\n');
 
-    console.log(`root-arm payload built into service/vendor/root-arm/`);
+    console.log(`root-arm payload built into vendor/root-arm/`);
     console.log(`  package   ${PACKAGE}`);
     console.log(`  staging   ${STAGING}`);
     console.log(`  callback  ${CALLBACK_HOST}:${CALLBACK_PORT}`);

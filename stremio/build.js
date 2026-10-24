@@ -34,7 +34,7 @@ function main() {
     mkdirSync(join(STAGE, 'src'), { recursive: true });
 
     INCLUDE.forEach((f) => cpSync(join(__dirname, f), join(STAGE, f)));
-    cpSync(join(__dirname, 'vendor', 'stremio-server', 'server.js'), join(STAGE, 'src', 'server.js'));
+    cpSync(join(ROOT, 'vendor', 'stremio', 'server.js'), join(STAGE, 'src', 'server.js'));
 
     mkdirSync(join(ROOT, 'release'), { recursive: true });
     rmSync(OUT, { force: true });

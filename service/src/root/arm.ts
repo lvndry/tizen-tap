@@ -21,12 +21,12 @@ const fs = require('fs');
 const path = require('path');
 const { randomBytes } = require('crypto');
 
-// The vendor tree sits at <service>/vendor/root-arm in both the checkout and
+// The vendor tree sits at <pkg>/vendor/root-arm in both the checkout and
 // the wgt, but this file runs from <service>/src/root in tests and from
-// <service>/dist in the packaged bundle, so try both relative depths (the same
-// trick the UI route uses). The manifest is the proof a candidate is real.
+// <service>/dist in the packaged bundle, so try both relative depths (the
+// same trick the UI route uses). The manifest is the proof a candidate is real.
 const VENDOR = [path.join(__dirname, '..', '..', 'vendor', 'root-arm'),
-    path.join(__dirname, '..', 'vendor', 'root-arm')]
+    path.join(__dirname, '..', '..', '..', 'vendor', 'root-arm')]
     .find((candidate) => fs.existsSync(path.join(candidate, 'manifest.json')));
 if (!VENDOR) throw new Error('root-arm payloads are missing — run `npm run rootarm` first');
 
