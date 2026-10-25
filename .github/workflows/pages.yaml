@@ -1,6 +1,4 @@
 # Adding an app is a commit to catalog/: the channel fetches this at runtime, so nothing is rebuilt.
-#
-# Needs Pages turned on once: Settings → Pages → Source: GitHub Actions.
 
 name: Catalog
 
@@ -54,7 +52,11 @@ jobs:
             console.log(list.length + ' apps');
           "
 
+      # enablement: true turns Pages on via the API when it is not set up yet,
+      # so a fresh repo needs no manual Settings step.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
