@@ -14,11 +14,11 @@
 const { json, failure } = require('../http/respond.ts');
 const { ErrorCode } = require('../protocol.ts');
 
-const register = (ctx, router) => {
+function register(ctx, router) {
     const { build, port, startedAt, runtime, device, packages, store, secret } = ctx;
 
     const { fromLoopback } = ctx;
-    const lanAddresses = () => {
+    function lanAddresses() {
         const interfaces = require('os').networkInterfaces();
         const wiredFirst = (name) => (/^(eth|en)/.test(name) ? 0 : /^(wlan|wl)/.test(name) ? 1 : 2);
 
@@ -27,11 +27,11 @@ const register = (ctx, router) => {
                 .filter((entry: any) => (entry.family === 'IPv4' || entry.family === 4) && !entry.internal)
                 .map((entry) => ({ address: entry.address, iface: name })))
             .sort((a, b) => wiredFirst(a.iface) - wiredFirst(b.iface));
-    };
+    }
 
     // What a caller on the television itself is allowed to know: the code, and where to reach this
     // from a phone. The socket says the same thing in its greeting, so the two cannot drift.
-    const pairing = () => {
+    function pairing() {
         const addresses = lanAddresses();
 
         return {
@@ -40,26 +40,26 @@ const register = (ctx, router) => {
             addresses: addresses.map((entry) => entry.address),
             url: addresses.length ? `http://${addresses[0].address}:${port}` : null
         };
-    };
+    }
 
     const authorise = ctx.authorise;
 
-    const authorisedRead = (request, response, handle) => {
+    function authorisedRead(request, response, handle) {
         if (fromLoopback(request)) return handle();
 
         const verdict = authorise(request.headers['x-homebrew-pin']);
         if (!verdict.ok) return failure(response, 403, verdict.code, verdict.message);
 
         return handle();
-    };
+    }
 
-    const onlyLoopback = (request, response, handle) => {
+    function onlyLoopback(request, response, handle) {
         if (!fromLoopback(request)) {
             return failure(response, 403, ErrorCode.UNAUTHORIZED, 'Only readable from the TV itself.');
         }
 
         return handle();
-    };
+    }
 
     router.on.get('/version', (_request, response) => json(response, {
         build,
@@ -101,6 +101,6 @@ const register = (ctx, router) => {
 
     ctx.pairing = pairing;
     ctx.lanAddresses = lanAddresses;
-};
+}
 
 module.exports = { register };

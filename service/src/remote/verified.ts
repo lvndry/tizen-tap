@@ -6,13 +6,17 @@ const { join, dirname } = require('path');
 
 const { getBuffer, getJson } = require('./fetch.ts');
 
-const digestOf = (buffer) => createHash('sha256').update(buffer).digest('hex');
+function digestOf(buffer) {
+    return createHash('sha256').update(buffer).digest('hex');
+}
 
 // Nothing is used unless its SHA-256 matches the manifest's digest, and it is checked on every read.
-const createLoader = ({ origin, cacheDir, manifestPath = 'latest.json' }) => {
-    const cachedAt = (name) => join(cacheDir, name);
+function createLoader({ origin, cacheDir, manifestPath = 'latest.json' }) {
+    function cachedAt(name) {
+    return join(cacheDir, name);
+}
 
-    const readCached = (name, expected) => {
+    function readCached(name, expected) {
         const path = cachedAt(name);
         if (!existsSync(path)) return null;
 
@@ -22,20 +26,22 @@ const createLoader = ({ origin, cacheDir, manifestPath = 'latest.json' }) => {
         } catch (e) {
             return null;
         }
-    };
+    }
 
-    const writeCached = (name, bytes) => {
+    function writeCached(name, bytes) {
         try {
             mkdirSync(dirname(cachedAt(name)), { recursive: true });
             writeFileSync(cachedAt(name), bytes);
         } catch (error) {
             console.error(`Could not cache ${name}: ${error.message}`);
         }
-    };
+    }
 
-    const manifest = () => getJson(`${origin}/${manifestPath}`);
+    function manifest() {
+    return getJson(`${origin}/${manifestPath}`);
+}
 
-    const load = async (name, expectedDigest) => {
+    async function load(name, expectedDigest) {
         const cached = readCached(name, expectedDigest);
         if (cached) return cached;
 
@@ -51,9 +57,9 @@ const createLoader = ({ origin, cacheDir, manifestPath = 'latest.json' }) => {
 
         writeCached(name, fetched);
         return fetched;
-    };
+    }
 
     return { manifest, load, digestOf };
-};
+}
 
 module.exports = { createLoader, digestOf };

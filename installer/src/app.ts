@@ -40,7 +40,7 @@ let progress: TextRenderable | null = null;
 
 // remove() wants the renderable itself, and each one holds native memory, so it is destroyed
 // rather than dropped: these screens are redrawn often enough for the difference to matter.
-const clear = () => {
+function clear() {
     for (const child of [...screen.getChildren()]) {
         screen.remove(child);
         child.destroyRecursively();
@@ -48,10 +48,10 @@ const clear = () => {
 
     picker = null;
     progress = null;
-};
+}
 
 // Every screen is a list of lines, so there is one way to draw and one place to change it.
-const show = (lines: (string | ReturnType<typeof t>)[]) => {
+function show(lines: (string | ReturnType<typeof t>)[]) {
     clear();
 
     lines.forEach((line, at) => {
@@ -59,14 +59,22 @@ const show = (lines: (string | ReturnType<typeof t>)[]) => {
     });
 
     renderer.requestRender();
-};
+}
 
-const heading = (text: string) => t`${bold(fg(ACCENT)(text))}`;
-const quiet = (text: string) => t`${dim(text)}`;
-const failure = (text: string) => t`${fg(BAD)(text)}`;
-const success = (text: string) => t`${fg(GOOD)(text)}`;
+function heading(text: string) {
+    return t`${bold(fg(ACCENT)(text))}`;
+}
+function quiet(text: string) {
+    return t`${dim(text)}`;
+}
+function failure(text: string) {
+    return t`${fg(BAD)(text)}`;
+}
+function success(text: string) {
+    return t`${fg(GOOD)(text)}`;
+}
 
-const showProgress = (label: string, got: number, total: number) => {
+function showProgress(label: string, got: number, total: number) {
     const text = `  ${bar(got, total)}`;
 
     if (!progress) {
@@ -79,14 +87,14 @@ const showProgress = (label: string, got: number, total: number) => {
 
     progress.content = text;
     renderer.requestRender();
-};
+}
 
-const bar = (got: number, total: number, width = 32) => {
+function bar(got: number, total: number, width = 32) {
     const done = total > 0 ? Math.min(1, got / total) : 0;
     const filled = Math.round(done * width);
 
     return `${"█".repeat(filled)}${"░".repeat(width - filled)}  ${Math.round(done * 100)}%`;
-};
+}
 
 // One place decides what a key means, and only the screen that asked for keys gets them.
 let onKey: ((name: string) => void) | null = null;
@@ -96,20 +104,22 @@ renderer.keyInput.on("keypress", (key: any) => {
     if (onKey) onKey(key.name);
 });
 
-const quit = (code: number) => {
+function quit(code: number) {
     renderer.destroy();
     finish(code);
-};
+}
 
-const waitForEnter = () => new Promise<void>((go) => {
+function waitForEnter() {
+    return new Promise<void>((go) => {
     onKey = (name) => {
         if (name !== "return" && name !== "enter") return;
         onKey = null;
         go();
     };
 });
+}
 
-const stumble = async (what: string, error: any) => {
+async function stumble(what: string, error: any) {
     show([
         failure(what),
         "",
@@ -119,14 +129,14 @@ const stumble = async (what: string, error: any) => {
     ]);
 
     await waitForEnter();
-};
+}
 
-const intro = async () => {
+async function intro() {
     const { primary, others } = await work.addresses();
     const here = primary || "this machine's address";
 
     const lines: any[] = [
-        heading("Tizen Homebrew"),
+        heading("Tizen Tap"),
         "",
         "  On the television, before anything else:",
         "",
@@ -149,9 +159,9 @@ const intro = async () => {
     show(lines);
 
     await waitForEnter();
-};
+}
 
-const choose = async (): Promise<work.Television> => {
+async function choose() {
     for (;;) {
         show(["", quiet("  looking for televisions...")]);
 
@@ -186,9 +196,10 @@ const choose = async (): Promise<work.Television> => {
 
         await waitForEnter();
     }
-};
+}
 
-const pick = (televisions: work.Television[]) => new Promise<work.Television>((chosen) => {
+function pick(televisions: work.Television[]) {
+    return new Promise<work.Television>((chosen) => {
     clear();
 
     screen.add(new TextRenderable(renderer, {
@@ -229,17 +240,19 @@ const pick = (televisions: work.Television[]) => new Promise<work.Television>((c
 
     renderer.requestRender();
 });
+}
 
-const identify = async (tv: work.Television): Promise<string> => {
+async function identify(tv: work.Television) {
     show(["", quiet(`  asking ${tv.ip} which device it is...`)]);
 
     return work.identify(tv.ip);
-};
+}
 
-const mint = async (duid: string) => {
+async function mint(duid: string) {
     const url = work.signInUrl();
 
-    const render = (opened: boolean) => show([
+    function render(opened: boolean) {
+    return show([
         heading("  Sign in to Samsung"),
         "",
         "  A certificate has to be issued to your own Samsung account. Open this:",
@@ -250,6 +263,7 @@ const mint = async (duid: string) => {
         quiet(opened ? "  Opened in your browser  ·  o to open it again  ·  q to quit" : "  o to open it  ·  or copy it in yourself  ·  q to quit"),
         quiet("  Waiting for the browser to come back...")
     ]);
+}
 
     render(false);
 
@@ -264,15 +278,15 @@ const mint = async (duid: string) => {
     } finally {
         onKey = null;
     }
-};
+}
 
-const fetchWidget = async () => {
+async function fetchWidget() {
     show(["", quiet("  fetching the widget...")]);
 
     return work.widget(local, (got, total) => showProgress("fetching the widget", got, total));
-};
+}
 
-const installIt = async (tv: work.Television, wgt: Buffer, pair: work.Pair) => {
+async function installIt(tv: work.Television, wgt: Buffer, pair: work.Pair) {
     show(["", quiet("  signing it for this television...")]);
 
     const signed = await work.sign(wgt, pair);
@@ -283,11 +297,11 @@ const installIt = async (tv: work.Television, wgt: Buffer, pair: work.Pair) => {
     return work.install(tv.ip, signed, pair, primary, {
         uploading: (sent, total) => showProgress("installing", sent, total)
     });
-};
+}
 
-const done = async (tv: work.Television, version: string) => {
+async function done(tv: work.Television, version: string) {
     show([
-        success(`  Tizen Homebrew ${version} is installed and open on ${tv.name}.`),
+        success(`  Tizen Tap ${version} is installed and open on ${tv.name}.`),
         "",
         "  One last thing, on the television itself:",
         "",
@@ -301,9 +315,9 @@ const done = async (tv: work.Television, version: string) => {
     ]);
 
     await waitForEnter();
-};
+}
 
-const run = async () => {
+async function run() {
     await intro();
 
     for (;;) {
@@ -324,7 +338,7 @@ const run = async () => {
             await stumble(`  ${tv.name} — that did not work.`, error);
         }
     }
-};
+}
 
 return { run, intro, choose, pick, done, stumble };
 };

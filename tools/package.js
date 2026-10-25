@@ -185,7 +185,7 @@ async function main() {
         ui.note(ui.style.dim('Install with `npm run bootstrap -- <tv-ip>`, or sdb install release/homebrew.wgt'));
     } else {
         ui.note('Packaged, signed by nobody.');
-        ui.note(ui.style.dim('This is what a release carries: an installed Tizen Homebrew re-signs it for'));
+        ui.note(ui.style.dim('This is what a release carries: an installed Tizen Tap re-signs it for'));
         ui.note(ui.style.dim('the TV it runs on. A set refuses it over sdb — package with --sign.'));
     }
     ui.blank();

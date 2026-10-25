@@ -228,7 +228,7 @@ const install = async (session, options) => {
 
     if (!installed) {
         throw friendly(
-            'Tizen Homebrew did not appear in the TV\'s application list after installing.\n\n' +
+            'Tizen Tap did not appear in the TV\'s application list after installing.\n\n' +
             `  ${output.trim() ? output.trim().slice(-300) : 'The installer produced no output.'}`
         );
     }

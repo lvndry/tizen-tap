@@ -11,20 +11,24 @@ const USER_AGENT = 'TizenHomebrew/1.0';
 const OWNER_REPO = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 const PACKAGE_SUFFIX = /\.(wgt|tpk)$/i;
 
-const rejected = (code, message) => Object.assign(new Error(message), { code });
+function rejected(code, message) {
+    return Object.assign(new Error(message), { code });
+}
 
 const quiet = { info: () => {}, ok: () => {}, warn: () => {}, err: () => {}, debug: () => {} };
-const reporter = (log) => (log ? log.on('pkg') : quiet);
+function reporter(log) {
+    return (log ? log.on('pkg') : quiet);
+}
 
-const withinLimit = (archive, description) => {
+function withinLimit(archive, description) {
     if (archive.length > MAX_PACKAGE) {
         throw rejected('downloadFailed', `${description} is ${archive.length} bytes, over the ${MAX_PACKAGE} limit.`);
     }
     return archive;
-};
+}
 
 // Unauthenticated, so a private repository looks like a missing one, and `releases/latest` skips drafts.
-const latestRelease = async (repo, log) => {
+async function latestRelease(repo, log) {
     if (!OWNER_REPO.test(repo)) throw rejected('badMessage', `"${repo}" is not an owner/repo reference.`);
 
     reporter(log).info(`asking github for the latest release of ${repo}`);
@@ -39,12 +43,14 @@ const latestRelease = async (repo, log) => {
         }
         throw Object.assign(rejected('downloadFailed', error.message), { status: error.status });
     }
-};
+}
 
-const pickAsset = (assets, wanted) => (assets || []).find((candidate) =>
+function pickAsset(assets, wanted) {
+    return (assets || []).find((candidate) =>
     PACKAGE_SUFFIX.test(candidate.name) && (!wanted || candidate.name.includes(wanted)));
+}
 
-const fromGitHub = async (repo, log, wanted = null) => {
+async function fromGitHub(repo, log, wanted = null) {
     const say = reporter(log);
 
     const release = await latestRelease(repo, log);
@@ -63,9 +69,9 @@ const fromGitHub = async (repo, log, wanted = null) => {
     const archive = await getBuffer(asset.browser_download_url, { headers: { 'user-agent': USER_AGENT } });
 
     return { archive: withinLimit(archive, asset.name), name: asset.name };
-};
+}
 
-const fromUrl = async (url, log) => {
+async function fromUrl(url, log) {
     if (!url.startsWith('https://')) throw rejected('badMessage', 'Package URLs must use https.');
 
     reporter(log).info(`downloading ${url}`);
@@ -73,18 +79,18 @@ const fromUrl = async (url, log) => {
     const archive = await getBuffer(url, { headers: { 'user-agent': USER_AGENT } });
 
     return { archive: withinLimit(archive, url), name: url.split('/').pop() };
-};
+}
 
-const fromFile = (path, log) => {
+function fromFile(path, log) {
     if (!existsSync(path)) throw rejected('notFound', `No file at ${path}.`);
     if (statSync(path).size > MAX_PACKAGE) throw rejected('badPackage', 'File is larger than the size limit.');
 
     reporter(log).info(`reading ${path} off the television's own disk`);
 
     return { archive: readFileSync(path), name: path.split('/').pop() };
-};
+}
 
-const resolve = async ({ source, reference, asset = null, catalog = [], upload = null, log = null }: any) => {
+async function resolve({ source, reference, asset = null, catalog = [], upload = null, log = null }: any) {
     switch (source) {
         case 'upload':
             if (!upload || !upload.length) throw rejected('badPackage', 'No package body received.');
@@ -105,6 +111,6 @@ const resolve = async ({ source, reference, asset = null, catalog = [], upload =
 
         default: throw rejected('badMessage', `Unknown install source "${source}".`);
     }
-};
+}
 
 module.exports = { resolve, latestRelease, pickAsset, MAX_PACKAGE };

@@ -13,24 +13,31 @@ const SPARE = 3;
 
 const BAND = 9;
 
-const wordmark = (extra = '') => html`
+function wordmark(extra = '') {
+    return html`
   <span class="mark ${extra}">
-    <b>tizen <i>homebrew</i></b>
+    <b>tizen <i>tap</i></b>
   </span>`;
+}
 
-const masthead = (state) => html`
+function masthead(state) {
+    return html`
   <div class="bar">
     ${wordmark('mark-hero')}
     <span class="micro mono">${state.build ? `build ${state.build}` : ''}</span>
   </div>`;
+}
 
-const code = (pin) => html`
+function code(pin) {
+    return html`
   <span class="code">
     ${(pin || '······').split('').map((character) => html`
       <span class="digit ${pin ? '' : 'digit-blank'}">${character}</span>`)}
   </span>`;
+}
 
-const connect = (state) => html`
+function connect(state) {
+    return html`
   <div class="glass marquee">
     <div class="stack stack-snug">
       <span class="label">Open on your phone</span>
@@ -41,14 +48,17 @@ const connect = (state) => html`
       ${code(state.pin)}
     </div>
   </div>`;
+}
 
-const band = (tone, head, body) => html`
+function band(tone, head, body) {
+    return html`
   <div class="state state-${tone}">
     <span class="state-head">${head}</span>
     <span class="small">${body}</span>
   </div>`;
+}
 
-const status = (state) => {
+function status(state) {
     if (state.ready === null) return band('warn', 'Starting', 'Waiting for the background service.');
 
     // Working is the ordinary state, and the log grows into the room a band saying so would hold.
@@ -57,40 +67,48 @@ const status = (state) => {
     return band('warn', 'No sdb route', html`Set <span class="mono ink">Host PC IP</span> to
         <span class="mono ink">127.0.0.1</span> in Apps › 12345 › Settings, then restart the
         TV — that value is only read at startup.`);
-};
+}
 
 const SPACES = '            ';
 
-const stamp = (t) => {
+function stamp(t) {
     const seconds = ((Number(t) || 0) / 1000).toFixed(3);
     return `[${SPACES.slice(0, Math.max(0, 9 - seconds.length))}${seconds}]`;
-};
+}
 
 // Three cells straight into one grid, so every line shares the column tracks. `data-row` marks the first cell
 // for tv.js.
-const line = (entry) => html`
+function line(entry) {
+    return html`
   <span class="mono stamp" data-row>${stamp(entry.t)}</span>
   <span class="mono facility">${entry.facility || 'svc'}:</span>
   <span class="tone-${entry.level || 'info'}">${entry.text}</span>`;
+}
 
-const log = (state) => html`
+function log(state) {
+    return html`
   <div class="feed log">
     ${state.lines.slice(-BAND).map(line)}
   </div>`;
+}
 
-const legend = (keys) => html`
+function legend(keys) {
+    return html`
   <div class="legend">
     ${keys.map(([key, meaning]) => html`
       <span class="legend-key"><span class="key">${key}</span><span>${meaning}</span></span>`)}
   </div>`;
+}
 
-const windowOf = (state) => ({
+function windowOf(state) {
+    return ({
     rows: state.rows || ROWS[state.view] || 0,
     total: state.view === 'credits' ? CREDITS.length : state.lines.length
 });
+}
 
 // Clamped here too, because the list moves under the window as well as the window over the list.
-const framed = (state, all, anchor) => {
+function framed(state, all, anchor) {
     const { rows } = windowOf(state);
     const from = Math.max(0, Math.min(state.from, all.length - rows));
 
@@ -103,25 +121,33 @@ const framed = (state, all, anchor) => {
         fits: Math.min(rows, all.length - from),
         shown: all.slice(ends ? Math.max(0, from - SPARE) : from, ends ? from + rows : from + rows + SPARE)
     };
-};
+}
 
-const position = (from, fits, total, noun) => html`
+function position(from, fits, total, noun) {
+    return html`
   <span class="micro mono">${total
       ? `${from + 1}–${from + fits} of ${total}`
       : `no ${noun} yet`}</span>`;
+}
 
-const head = (title, where) => html`
+function head(title, where) {
+    return html`
   <div class="bar bar-overlay">
     <span class="label">${title}</span>
     ${where}
     <button class="btn btn-quiet" data-focus="close" data-on-click="close">back</button>
   </div>`;
+}
 
 const KEYS = [['▲ ▼', 'a line'], ['◀ ▶', 'a page'], ['↩', 'back']];
 
-const tally = (lines) => {
-    const of = (level) => lines.filter((entry) => entry.level === level).length;
-    const plural = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+function tally(lines) {
+    function of(level) {
+    return lines.filter((entry) => entry.level === level).length;
+}
+    function plural(count, noun) {
+    return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
 
     const problems = [
         of('err') > 0 ? plural(of('err'), 'error') : null,
@@ -129,9 +155,9 @@ const tally = (lines) => {
     ].filter(Boolean);
 
     return problems.length ? problems.join(' · ') : 'nothing wrong';
-};
+}
 
-const console_ = (state) => {
+function console_(state) {
     const { from, fits, shown } = framed(state, state.lines, 'end');
 
     return html`
@@ -143,10 +169,10 @@ const console_ = (state) => {
           ${legend(KEYS.concat([['RED', 'newest']]))}
         </div>
       </div>`;
-};
+}
 
 // Every kind of row is one line high, which is what lets the window above count rows rather than measure them.
-const credit = (row) => {
+function credit(row) {
     if (row.head) return html`<div class="credit credit-rule" data-row><span class="label">${row.head}</span></div>`;
     if (row.note) return html`<div class="credit credit-note" data-row><span class="small">${row.note}</span></div>`;
 
@@ -157,9 +183,9 @@ const credit = (row) => {
         </span>
         <span class="mono small">${row.at || ''}</span>
       </div>`;
-};
+}
 
-const credits = (state) => {
+function credits(state) {
     const { from, fits, shown } = framed(state, CREDITS, 'start');
 
     return html`
@@ -170,21 +196,23 @@ const credits = (state) => {
           ${legend(KEYS)}
         </div>
       </div>`;
-};
+}
 
-const overlay = (state) => {
+function overlay(state) {
     if (state.view === 'logs') return console_(state);
     if (state.view === 'credits') return credits(state);
 
     return html``;
-};
+}
 
-const deck = (state) => {
+function deck(state) {
     // Said again here, since a dropped CSS rule would otherwise strand focus on buttons nobody can see.
     if (state.view !== 'main') return html``;
 
-    const button = (name, label) => html`
+    function button(name, label) {
+    return html`
       <button class="btn" data-focus="${name}" data-on-click="${name}">${label}</button>`;
+}
 
     return html`
       <div class="stack stack-snug">
@@ -203,6 +231,6 @@ const deck = (state) => {
             ['↩', 'exit']
         ])}
       </div>`;
-};
+}
 
 export { masthead, connect, status, log, overlay, deck, windowOf, wordmark, code, band, ROWS, SPARE };

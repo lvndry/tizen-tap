@@ -12,12 +12,12 @@
          at once, and nothing reachable through sdbd's command allowlist could
          clear it. If that ever happens again, changing this is the cure. -->
     <tizen:application id="GJBBYNLkgP.TizenHomebrew" package="GJBBYNLkgP" required_version="3.0"/>
-    <author>Tizen Homebrew</author>
+    <author>Tizen Tap</author>
     <content src="ui/dist/tv.html"/>
     <feature name="http://tizen.org/feature/screen.size.all"/>
     <feature name="http://tizen.org/feature/web.service"/>
     <icon src="icon.png"/>
-    <name>Tizen Homebrew</name>
+    <name>Tizen Tap</name>
 
     <!-- Every privilege here is public level, and that is a requirement rather
          than a coincidence: a partner-level privilege can only be carried by a
@@ -77,7 +77,7 @@
     <tizen:service id="GJBBYNLkgP.TizenHomebrewService" auto-restart="true" on-boot="true">
         <tizen:content src="service/dist/index.js"/>
         <tizen:name>TizenHomebrewService</tizen:name>
-        <tizen:description>Serves the Tizen Homebrew UI and installs packages over loopback SDB.</tizen:description>
+        <tizen:description>Serves the Tizen Tap UI and installs packages over loopback SDB.</tizen:description>
     </tizen:service>
 
     <!-- background-support is "disable" so Back actually ends the page. Enabled,

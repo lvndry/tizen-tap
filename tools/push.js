@@ -98,10 +98,10 @@ async function pushOne(ip, pin, buildBefore) {
         }
 
         throw friendly(
-            `Tizen Homebrew at ${ip}:${PORT} did not come back within a minute — ${err.message}\n\n` +
+            `Tizen Tap at ${ip}:${PORT} did not come back within a minute — ${err.message}\n\n` +
             '  The install has probably finished; the service only runs while the app is\n' +
             '  open, and a set that had moved on will not reopen it by itself.\n\n' +
-            '  Open Tizen Homebrew on the TV, then check:  npm run push -- ' + `${ip} <pin>`
+            '  Open Tizen Tap on the TV, then check:  npm run push -- ' + `${ip} <pin>`
         );
     }
 
@@ -109,7 +109,7 @@ async function pushOne(ip, pin, buildBefore) {
     try {
         result = await res.json();
     } catch (e) {
-        throw friendly(`Tizen Homebrew replied with HTTP ${res.status} and no JSON.`);
+        throw friendly(`Tizen Tap replied with HTTP ${res.status} and no JSON.`);
     }
 
     if (!res.ok || !result.ok) {

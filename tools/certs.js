@@ -64,8 +64,8 @@ const main = async () => {
             signal: AbortSignal.timeout(20000)
         }).catch((error) => {
             throw friendly(
-                `Could not reach Tizen Homebrew at ${ip}:${PORT} — ${error.message}\n\n` +
-                '  Open Tizen Homebrew on the TV; the service only runs while it is open.'
+                `Could not reach Tizen Tap at ${ip}:${PORT} — ${error.message}\n\n` +
+                '  Open Tizen Tap on the TV; the service only runs while it is open.'
             );
         });
 

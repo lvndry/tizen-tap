@@ -9,7 +9,8 @@ import * as tv from './views/television.ts';
 // is in an iframe at its true 1920x1080 because every size on that page is a fraction of the
 // viewport, and a viewport unit in this document would resolve against the browser window — which
 // is precisely how a screen full of 17px text reached the living room.
-const artwork = (letter, top, bottom) => `data:image/svg+xml;base64,${btoa(
+function artwork(letter, top, bottom) {
+    return `data:image/svg+xml;base64,${btoa(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
     '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">' +
     `<stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${bottom}"/>` +
@@ -17,6 +18,7 @@ const artwork = (letter, top, bottom) => `data:image/svg+xml;base64,${btoa(
     '<text x="32" y="45" text-anchor="middle" fill="#ffffff" font-weight="700" ' +
     `font-size="36" font-family="Helvetica,Arial,sans-serif">${letter}</text></svg>`
 )}`;
+}
 
 const TUBE = artwork('Y', '#ff4d4d', '#9b0000');
 const JELLYFIN = artwork('J', '#aa5cd6', '#00a4dc');
@@ -31,7 +33,7 @@ const base = {
     connection: 'connected', paired: true, pin: '', pinError: null, restoring: false, themeOn: true,
     device: { onTv: true, ready: true, platformVersion: '6.5' },
     catalog: [
-        { id: 'homebrew', name: 'Tizen Homebrew', version: '0.2.0', installed: '0.1.0', available: '0.2.0', checked: true, update: true, description: 'This app. Updates itself.', icon: HOMEBREW, source: { type: 'github', ref: 'SushyDev/tizen-homebrew' } },
+        { id: 'homebrew', name: 'Tizen Tap', version: '0.2.0', installed: '0.1.0', available: '0.2.0', checked: true, update: true, description: 'This app. Updates itself.', icon: HOMEBREW, source: { type: 'github', ref: 'lvndry/tizen-tap' } },
         { id: 'tube', name: 'YouTube', version: '0.1.0', installed: '0.1.0', available: '0.1.0', checked: true, update: false, description: 'YouTube without the advertisements', icon: TUBE, source: { type: 'github', ref: 'SushyDev/tube' } },
         { id: 'jellyfin', name: 'Jellyfin', version: null, installed: '10.9.1', available: null, checked: false, update: false, description: 'Your own media server', icon: JELLYFIN, source: { type: 'github', ref: 'jellyfin/jellyfin-tizen' } },
         { id: 'kodi', name: 'Kodi', version: '21.0', installed: null, available: '21.0', checked: true, update: false, description: 'The media center, ported', icon: null, source: { type: 'url', ref: 'https://example.invalid/Kodi.wgt' } }
@@ -72,9 +74,12 @@ const scenes: Array<[string, any]> = [
     ['Shell', { ...base, tab: 'relay' }]
 ];
 
-const caption = (name) => html`<div class="label" style="color:var(--signal)">${name}</div>`;
+function caption(name) {
+    return html`<div class="label" style="color:var(--signal)">${name}</div>`;
+}
 
-const phone = ([name, state]) => html`
+function phone([name, state]) {
+    return html`
   <section style="padding-bottom:2rem;border-bottom:1px solid rgba(167,214,238,0.12)">
     <main class="page">
       ${caption(name)}
@@ -85,6 +90,7 @@ const phone = ([name, state]) => html`
       ${state.paired ? outcome(state) : ''}
     </main>
   </section>`;
+}
 
 const televisionState = {
     url: 'http://192.168.2.9:8091',
@@ -103,7 +109,7 @@ const televisionState = {
 };
 
 const history = [
-    [3, 'svc', 'info', 'tizen homebrew 20260828-1 starting'],
+    [3, 'svc', 'info', 'tizen tap 20260828-1 starting'],
     [4, 'svc', 'info', 'node v4.4.3 on linux/armv7l, pid 4127'],
     [4, 'auth', 'info', 'pairing pin 386588 — regenerated every start'],
     [5, 'cat', 'info', 'origin https://cdn.example.com/homebrew/catalog.json'],
@@ -158,7 +164,8 @@ const televisions: Array<[string, any]> = [
 ];
 
 // The same sections tv.html carries, because tv.css sizes them by name.
-const screenMarkup = (state) => html`
+function screenMarkup(state) {
+    return html`
   <section id="overlay">${tv.overlay(state)}</section>
   <main class="screen">
     <header id="masthead">${tv.masthead(state)}</header>
@@ -167,8 +174,10 @@ const screenMarkup = (state) => html`
     <section id="log">${tv.log(state)}</section>
     <footer id="deck">${tv.deck(state)}</footer>
   </main>`;
+}
 
-const television = ([name, state]) => html`
+function television([name, state]) {
+    return html`
   <section style="padding:1.5rem 1rem;display:grid;gap:1.25rem;justify-items:center">
     ${caption(`${name} · 1920×1080, shown at half size`)}
     <div style="width:960px;height:540px;max-width:100%;overflow:hidden;border-radius:0.5rem;
@@ -177,6 +186,7 @@ const television = ([name, state]) => html`
               srcdoc="${`<!doctype html><html><head><meta charset='utf-8'><style>${stylesheet}</style></head><body class='tv'>${screenMarkup(state).__markup}</body></html>`}"></iframe>
     </div>
   </section>`;
+}
 
 
 (document.getElementById('preview') as HTMLElement).innerHTML =

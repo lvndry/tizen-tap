@@ -27,7 +27,7 @@ async function main() {
         throw friendly(
             'Which TV?\n\n  npm run duid -- <tv-ip> [pin]\n\n' +
             '  Find the address in the TV\'s network settings, or check your router.\n' +
-            '  The PIN is on the TV screen once Tizen Homebrew is installed, and lets\n' +
+            '  The PIN is on the TV screen once Tizen Tap is installed, and lets\n' +
             '  this ask the television even with developer mode pinned to loopback.'
         );
     }
@@ -55,7 +55,7 @@ async function main() {
     if (measured) {
         ui.ok('duid', measured);
         ui.note(ui.style.dim(pin
-            ? '  from `getduid`, relayed through Tizen Homebrew — the value a certificate binds to'
+            ? '  from `getduid`, relayed through Tizen Tap — the value a certificate binds to'
             : '  from `getduid` over sdb — the value a certificate binds to'));
 
         if (bound && bound.devices.indexOf(measured) !== -1) {
@@ -103,7 +103,7 @@ async function main() {
         ui.blank();
         ui.note(ui.style.dim(`  npm run duid -- ${ip} <pin>`));
         ui.blank();
-        ui.note(ui.style.dim('  That relays `getduid` through Tizen Homebrew, which reaches sdbd over'));
+        ui.note(ui.style.dim('  That relays `getduid` through Tizen Tap, which reaches sdbd over'));
         ui.note(ui.style.dim('  loopback — no repointing, and as authoritative as asking sdb directly.'));
         ui.blank();
         return;
@@ -112,7 +112,7 @@ async function main() {
     ui.note('To ask the television itself, sdbd has to accept this machine. Either:');
     ui.blank();
     ui.note(ui.style.dim(`  · point the TV's Host PC IP at ${mine || 'this machine'} and restart it, then run this again`));
-    ui.note(ui.style.dim('  · or run `getduid` through Tizen Homebrew\'s own relay, from the phone UI\'s'));
+    ui.note(ui.style.dim('  · or run `getduid` through Tizen Tap\'s own relay, from the phone UI\'s'));
     ui.note(ui.style.dim('    Shell tab, which reaches sdbd over loopback and needs no repointing'));
     ui.blank();
 }

@@ -16,7 +16,9 @@ const IDLE_TIMEOUT = 30000;
 // command never ran — so a fresh socket is safe to try. A refusal is not that: nothing is listening.
 const TRANSIENT = { sdbReset: true, sdbClosed: true };
 
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // A real DUID is one run of letters and digits; a failed read answers in prose, which must never
 // reach a certificate's device id.
@@ -154,11 +156,14 @@ Session.prototype.getDuid = function (options) {
 
     // The whole line, not the first chunk of it: sdbd splits output where it likes, and half a DUID
     // still looks like a DUID.
-    const ask = () => self
+    function ask() {
+        return self
         .exec('shell:0 getduid', { timeout: 10000, until: (o) => o.indexOf('\n') !== -1 })
         .then((out) => String(out).split('\n')[0].trim());
+    }
 
-    const attempt = (number) => ask().then((duid) => {
+    function attempt(number) {
+        return ask().then((duid) => {
         if (LOOKS_LIKE_DUID.test(duid)) return duid;
 
         if (number >= attempts) {
@@ -168,6 +173,7 @@ Session.prototype.getDuid = function (options) {
 
         return wait(RETRY_BACKOFF).then(() => attempt(number + 1));
     });
+    }
 
     return attempt(1);
 };
@@ -302,13 +308,15 @@ function connect(options) {
     const backoff = opts.backoff === undefined ? RETRY_BACKOFF : opts.backoff;
     const log = opts.log || function () {};
 
-    const attempt = (number) => connectOnce(host, port, timeout, log).catch((error) => {
+    function attempt(number) {
+        return connectOnce(host, port, timeout, log).catch((error) => {
         if (number >= attempts || !TRANSIENT[error.code]) throw error;
 
         log(`sdb ${error.code} on attempt ${number} of ${attempts}; retrying on a fresh socket`);
 
         return wait(backoff * number).then(() => attempt(number + 1));
     });
+    }
 
     return attempt(1);
 }

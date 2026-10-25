@@ -1,6 +1,6 @@
 'use strict';
 
-// Installs Tizen Homebrew onto the TV from this machine, over the vendored ADB client. `--replace`
+// Installs Tizen Tap onto the TV from this machine, over the vendored ADB client. `--replace`
 // removes what is installed first, which is the only way past a changed author certificate.
 //
 // The install itself lives in installing.js, because the standalone installer does the same thing
@@ -64,7 +64,7 @@ async function main() {
         throw friendly(
             `${WGT} is not signed, and sdb will not install an unsigned package.\n\n` +
             '  `npm run package` builds those; they are for `npm run push`, which goes\n' +
-            '  through Tizen Homebrew and re-signs on the way in.\n\n' +
+            '  through Tizen Tap and re-signs on the way in.\n\n' +
             '  Build a signed one:  npm run package -- --sign'
         );
     }
@@ -139,7 +139,7 @@ async function main() {
 
     // Open it, so its screen is up with the URL and PIN already showing.
     const launched = await installing.launchApp(ip, appId);
-    if (launched) ui.ok('launched', 'Tizen Homebrew is open on the TV');
+    if (launched) ui.ok('launched', 'Tizen Tap is open on the TV');
 
     ui.blank();
     ui.note('Installed. One manual step, on the TV itself:');

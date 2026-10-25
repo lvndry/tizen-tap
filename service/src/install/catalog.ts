@@ -10,11 +10,13 @@ const CACHE_TTL = 6 * 60 * 60 * 1000;
 const quiet = { info: () => {}, ok: () => {}, warn: () => {}, err: () => {}, debug: () => {} };
 
 // Guessed, not required: an app with no logo.png answers 404 and the phone draws a monogram.
-const logoFor = (source) => (source.type === 'github'
+function logoFor(source) {
+    return (source.type === 'github'
     ? `https://raw.githubusercontent.com/${source.ref}/HEAD/logo.png`
     : null);
+}
 
-const usable = (entry) => {
+function usable(entry) {
     if (!entry || typeof entry.id !== 'string' || typeof entry.name !== 'string') return null;
     if (!entry.source || !['github', 'url'].includes(entry.source.type)) return null;
     if (typeof entry.source.ref !== 'string') return null;
@@ -34,12 +36,12 @@ const usable = (entry) => {
             : logoFor(source),
         source
     };
-};
+}
 
-const createCatalog = ({ url, cachePath, log }) => {
+function createCatalog({ url, cachePath, log }) {
     const say = log ? log.on('cat') : quiet;
 
-    const readCache = () => {
+    function readCache() {
         if (!existsSync(cachePath)) return null;
 
         try {
@@ -50,9 +52,9 @@ const createCatalog = ({ url, cachePath, log }) => {
         } catch (e) {
             return null;
         }
-    };
+    }
 
-    const fetch = async ({ refresh = false } = {}) => {
+    async function fetch({ refresh = false } = {}) {
         const cached = readCache();
 
         if (!refresh && cached && cached.age < CACHE_TTL) {
@@ -92,9 +94,9 @@ const createCatalog = ({ url, cachePath, log }) => {
             say.err(`no catalog and no cache: ${error.message}`);
             throw Object.assign(new Error(`Could not load the app catalog: ${error.message}`), { code: 'downloadFailed' });
         }
-    };
+    }
 
     return { fetch };
-};
+}
 
 module.exports = { createCatalog, usable, logoFor };

@@ -71,19 +71,21 @@ const SIGNATURES = [
     }
 ];
 
-const verdictLine = (text, matches) => text
+function verdictLine(text, matches) {
+    return text
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((line) => matches.test(line) || /install failed/i.test(line))[0] || text.trim().slice(-400);
+}
 
-const settled = (output) => {
+function settled(output) {
     const text = output || '';
 
     return text.indexOf(SUCCEEDED) !== -1 || SIGNATURES.some((signature) => signature.matches.test(text));
-};
+}
 
-const failureIn = (output, context) => {
+function failureIn(output, context) {
     const text = output || '';
     const signature = SIGNATURES.filter((candidate) => candidate.matches.test(text))[0];
 
@@ -94,10 +96,10 @@ const failureIn = (output, context) => {
         line: verdictLine(text, signature.matches),
         remedy: signature.remedy(Object.assign({ output: text }, context || {}))
     };
-};
+}
 
 // An empty string is not success: that once reported a failed install as a done one.
-const interpret = (output, context) => {
+function interpret(output, context) {
     const text = output || '';
     const failure = failureIn(text, context);
 
@@ -114,6 +116,6 @@ const interpret = (output, context) => {
     }
 
     return { output: text };
-};
+}
 
 module.exports = { interpret, failureIn, settled, verdictLine, SIGNATURES, SUCCEEDED };

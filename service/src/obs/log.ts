@@ -22,11 +22,15 @@ const Facility = {
 };
 
 // Node 4.4.3 is the floor on Tizen 3 and has no padStart.
-const padLeft = (text, width) => (text.length >= width
+function padLeft(text, width) {
+    return (text.length >= width
     ? text
     : new Array(width - text.length + 1).join(' ') + text);
+}
 
-const format = (record) => `[${padLeft((record.t / 1000).toFixed(6), 12)}] ${record.facility}: ${record.text}`;
+function format(record) {
+    return `[${padLeft((record.t / 1000).toFixed(6), 12)}] ${record.facility}: ${record.text}`;
+}
 
 // Tizen reloads the service into the same process, so the console is wrapped once per process.
 const SINK = (() => {
@@ -63,7 +67,7 @@ const SINK = (() => {
 })();
 
 // `print` and `capture` exist for the test, which records neither into nor from the suite's own console.
-const startRecording = (options) => {
+function startRecording(options) {
     const settings = options || {};
     const max = settings.max || MAX_LINES;
     const keepDebug = settings.debug !== undefined ? !!settings.debug : !!process.env.HOMEBREW_DEBUG;
@@ -77,7 +81,7 @@ const startRecording = (options) => {
     const listeners: ((written: any[]) => void)[] = [];
     let notifying = false;
 
-    const notify = (written) => {
+    function notify(written) {
         // A listener that logs would come straight back through here; the nested line is still
         // recorded, it simply does not fan out again.
         if (notifying || written.length === 0 || listeners.length === 0) return;
@@ -95,29 +99,29 @@ const startRecording = (options) => {
         } finally {
             notifying = false;
         }
-    };
+    }
 
-    const subscribe = (listener) => {
+    function subscribe(listener) {
         listeners.push(listener);
 
         return () => {
             const at = listeners.indexOf(listener);
             if (at !== -1) listeners.splice(at, 1);
         };
-    };
+    }
 
     // hrtime is in Node 4, which is the oldest runtime this service has to start on.
     const origin = process.hrtime ? process.hrtime() : null;
     const startedWall = Date.now();
 
-    const elapsed = () => {
+    function elapsed() {
         if (!origin) return Date.now() - startedWall;
 
         const delta = process.hrtime(origin);
         return delta[0] * 1000 + delta[1] / 1e6;
-    };
+    }
 
-    const render = (value) => {
+    function render(value) {
         if (typeof value === 'string') return value;
         if (value instanceof Error) return value.stack || value.message;
 
@@ -126,10 +130,10 @@ const startRecording = (options) => {
         } catch (e) {
             return String(value);
         }
-    };
+    }
 
     // One record is one line: a multi-line one made the TV's row count recurse until the stack ran out.
-    const record = (level, facility, text) => {
+    function record(level, facility, text) {
         if (level === 'debug' && !keepDebug) return [];
 
         const written = String(text).replace(/[\r\n]+$/, '').split(/\r?\n/).map((one) => {
@@ -151,9 +155,9 @@ const startRecording = (options) => {
         notify(written);
 
         return written;
-    };
+    }
 
-    const write = (level, facility, values) => {
+    function write(level, facility, values) {
         try {
             const written = record(level, facility, values.map(render).join(' '));
 
@@ -167,7 +171,7 @@ const startRecording = (options) => {
         } catch (e) {
             // Logging must never be the reason something fails.
         }
-    };
+    }
 
     const log: any = {};
 
@@ -189,17 +193,19 @@ const startRecording = (options) => {
         );
     }
 
-    const since = (sequenceNumber) => {
+    function since(sequenceNumber) {
         const from = Number(sequenceNumber) || 0;
         return lines.filter((line) => line.seq > from);
-    };
+    }
 
-    const counts = () => lines.reduce((tally, line) => {
+    function counts() {
+    return lines.reduce((tally, line) => {
         tally[line.level] = (tally[line.level] || 0) + 1;
         return tally;
     }, {});
+}
 
     return { log, since, subscribe, counts, format, uptime: elapsed };
-};
+}
 
 module.exports = { startRecording, format, Facility, LEVELS, MAX_LINES };

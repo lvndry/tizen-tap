@@ -3,7 +3,7 @@
 #   npm run version:set 1.2.0    # and commit
 #   git tag v1.2.0 && git push origin v1.2.0
 #
-# Unsigned on purpose: a signature names one television, and Tizen Homebrew re-signs what it installs.
+# Unsigned on purpose: a signature names one television, and Tizen Tap re-signs what it installs.
 # Draft on purpose: GitHub refuses uploads to a published release, and publishing by hand is what
 # makes `releases/latest` offer the update.
 
@@ -31,10 +31,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: npm
 
+      - uses: oven-sh/setup-bun@v2
+
+      # bun.lock is the lockfile; npm ci would ask for a package-lock.json we do not keep.
       - name: Install
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Check the tag matches the version
         if: startsWith(github.ref, 'refs/tags/')
@@ -68,7 +70,7 @@ jobs:
         id: widget
         run: |
           version="$(node -p "require('./tizen.config.json').version")"
-          name="tizen-homebrew-${version}.wgt"
+          name="tizen-tap-${version}.wgt"
           mv release/homebrew.wgt "release/${name}"
           echo "path=release/${name}" >> "$GITHUB_OUTPUT"
 
@@ -86,7 +88,7 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
-          name: tizen-homebrew-widget
+          name: tizen-tap-widget
           path: ${{ steps.widget.outputs.path }}
           if-no-files-found: error
 
@@ -102,13 +104,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: npm
 
       - uses: oven-sh/setup-bun@v2
 
-      # The installer bundles this repository's own modules, and they bring jszip, tizen and forge.
+      # bun.lock is the lockfile; npm ci would ask for a package-lock.json we do not keep.
       - name: Install
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Install the installer's dependencies
         working-directory: installer
@@ -130,11 +131,11 @@ jobs:
             bun build --compile --minify --target="$1" src/main.ts --outfile "dist/$2"
           }
 
-          build bun-darwin-arm64  tizen-homebrew-installer-macos-arm64
-          build bun-darwin-x64    tizen-homebrew-installer-macos-x64
-          build bun-linux-x64     tizen-homebrew-installer-linux-x64
-          build bun-linux-arm64   tizen-homebrew-installer-linux-arm64
-          build bun-windows-x64   tizen-homebrew-installer-windows-x64
+          build bun-darwin-arm64  tizen-tap-installer-macos-arm64
+          build bun-darwin-x64    tizen-tap-installer-macos-x64
+          build bun-linux-x64     tizen-tap-installer-linux-x64
+          build bun-linux-arm64   tizen-tap-installer-linux-arm64
+          build bun-windows-x64   tizen-tap-installer-windows-x64
 
           ls -la dist
 
@@ -145,13 +146,13 @@ jobs:
           tag_name: ${{ github.ref_name }}
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          files: installer/dist/tizen-homebrew-installer-*
+          files: installer/dist/tizen-tap-installer-*
           fail_on_unmatched_files: true
 
       - name: Upload them as artifacts
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
-          name: tizen-homebrew-installers
-          path: installer/dist/tizen-homebrew-installer-*
+          name: tizen-tap-installers
+          path: installer/dist/tizen-tap-installer-*
           if-no-files-found: error

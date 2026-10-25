@@ -24,7 +24,7 @@ const { resign } = resigner;
 
 // Where a release keeps the widget. Unsigned on purpose: a signature names one television, so the
 // installer signs it here with the pair it just minted.
-const LATEST = "https://api.github.com/repos/SushyDev/tizen-homebrew/releases/latest";
+const LATEST = "https://api.github.com/repos/lvndry/tizen-tap/releases/latest";
 
 export type Television = {
     ip: string;

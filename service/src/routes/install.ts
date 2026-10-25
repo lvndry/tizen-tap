@@ -18,16 +18,16 @@ const { ErrorCode } = require('../protocol.ts');
 // let auto-restart load the new build — no manual relaunch.
 const SELF_PACKAGE_ID = 'GJBBYNLkgP';
 
-const register = (ctx, router) => {
+function register(ctx, router) {
     const { authorise, installer, updates, sdb, store, config, log } = ctx;
 
     const pkg = log.on(Facility.PKG);
     const cfg = log.on(Facility.CFG);
 
-    const requirePin = (request, response) => {
+    function requirePin(request, response) {
         const verdict = authorise(request.headers['x-homebrew-pin']);
         return verdict.ok || failure(response, verdict.code === ErrorCode.LOCKED_OUT ? 429 : 403, verdict.code, verdict.message);
-    };
+    }
 
     router.on.post('/install', async (request, response) => {
         if (!requirePin(request, response)) return;
@@ -118,6 +118,6 @@ const register = (ctx, router) => {
 
         json(response, { ok: true });
     });
-};
+}
 
 module.exports = { register };

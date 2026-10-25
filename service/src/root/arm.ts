@@ -102,11 +102,11 @@ function arm(sdb, channel, log) {
         })
     ).then(() => new Promise((resolve, reject) => {
         const deadline = Date.now() + 30000;
-        const tick = () => {
+        function tick() {
             if (channel.connected) return resolve(channel.identity);
             if (Date.now() > deadline) return reject(new Error('root-arm: the agent never dialed back in'));
             setTimeout(tick, 500);
-        };
+        }
         tick();
     })).then((identity) => {
         log(`root-arm: root armed (uid ${identity.uid}, cap ${identity.capEff})`);

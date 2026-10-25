@@ -7,7 +7,7 @@ const ENGINES = [
     { key: 'v8', label: 'V8', flavour: 'node' }
 ];
 
-const describe = (from) => {
+function describe(from) {
     const source = from || process;
     const versions = source.versions || {};
     const release = source.release || {};
@@ -30,9 +30,9 @@ const describe = (from) => {
 
         versions
     };
-};
+}
 
-const summary = (from) => {
+function summary(from) {
     const it = describe(from);
 
     const engine = it.engineVersion
@@ -42,6 +42,6 @@ const summary = (from) => {
     return `node ${it.node} (${it.flavour === 'node' ? engine : `${it.flavour}, ${engine}`})` +
         ` on ${it.platform}/${it.arch}` +
         (it.abi ? `, abi ${it.abi}` : '');
-};
+}
 
 module.exports = { describe, summary, ENGINES };

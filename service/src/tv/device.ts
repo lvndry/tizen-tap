@@ -10,7 +10,7 @@ const RESIGN_REQUIRED_FROM = 7;
 
 const onTv = typeof tizen !== 'undefined';
 
-const platformVersion = () => {
+function platformVersion() {
     if (!onTv) return null;
 
     try {
@@ -18,11 +18,11 @@ const platformVersion = () => {
     } catch (e) {
         return null;
     }
-};
+}
 
 // Runs on the shared connection, so a probe every fifteen seconds costs a stream rather than a socket.
 // Two connect tries, not the default three: the probe also runs on page load and must answer quickly.
-const canReachSdb = async () => {
+async function canReachSdb() {
     try {
         return await sdb.withSession({ timeout: 4000, attempts: 2 }, async (session) => {
             // A reply that is not a device id still proves the daemon is answering.
@@ -34,10 +34,10 @@ const canReachSdb = async () => {
     } catch (error) {
         return { reachable: false, error: error.code || 'unknown', detail: error.message || null, duid: null };
     }
-};
+}
 
 // Readiness is established by doing the thing: `developerIP` has reported 127.0.0.1 while sdbd refused.
-const probe = async () => {
+async function probe() {
     const version = platformVersion();
 
     const major = (() => {
@@ -89,6 +89,6 @@ const probe = async () => {
         ready: sdbState.reachable,
         reason
     };
-};
+}
 
 module.exports = { probe, canReachSdb, platformVersion, onTv, RESIGN_REQUIRED_FROM };

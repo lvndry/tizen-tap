@@ -26,24 +26,24 @@ const AudioContextClass: typeof AudioContext | undefined = window.AudioContext
 
 // The television wants the channel audible on open and the phone does not, so the default is the page's; a
 // person's own choice overrides it. Wrapped because storage can throw.
-const remembered = (fallback) => {
+function remembered(fallback) {
     try {
         const stored = window.localStorage.getItem(STORAGE_KEY);
         return stored === null ? fallback : stored === 'on';
     } catch (e) {
         return fallback;
     }
-};
+}
 
-const remember = (on) => {
+function remember(on) {
     try {
         window.localStorage.setItem(STORAGE_KEY, on ? 'on' : 'off');
     } catch (e) {
         // Not worth failing over.
     }
-};
+}
 
-const theme = ({ onState = (state: { playing: boolean; blocked: boolean; failed: boolean }) => {}, defaultOn = true } = {}) => {
+function theme({ onState = (state: { playing: boolean; blocked: boolean; failed: boolean }) => {}, defaultOn = true } = {}) {
     let context: AudioContext | null = null;
     let source: AudioBufferSourceNode | null = null;
     let gain: GainNode | null = null;
@@ -51,13 +51,16 @@ const theme = ({ onState = (state: { playing: boolean; blocked: boolean; failed:
     let wanted = remembered(defaultOn);
     let failed = false;
 
-    const report = () => onState({
+    function report() {
+    return onState({
         playing: !!source && wanted && !failed,
         blocked: !!context && context.state === 'suspended',
         failed
     });
+}
 
-    const fetchBuffer = () => new Promise((resolve, reject) => {
+    function fetchBuffer() {
+    return new Promise((resolve, reject) => {
         // XHR rather than fetch, which Chromium 63 only half implements.
         const request = new XMLHttpRequest();
         request.open('GET', FILE, true);
@@ -68,10 +71,11 @@ const theme = ({ onState = (state: { playing: boolean; blocked: boolean; failed:
         request.onerror = () => reject(new Error('unreachable'));
         request.send();
     });
+}
 
     // The frame count is checked against the one the file was built with, so a short read is an error here
     // rather than a missing bar later.
-    const readWave = (bytes) => {
+    function readWave(bytes) {
         const view = new DataView(bytes);
         const ascii = (at) => String.fromCharCode(
             view.getUint8(at), view.getUint8(at + 1), view.getUint8(at + 2), view.getUint8(at + 3));
@@ -121,9 +125,9 @@ const theme = ({ onState = (state: { playing: boolean; blocked: boolean; failed:
         }
 
         return target;
-    };
+    }
 
-    const play = () => {
+    function play() {
         if (source || !buffer || !wanted) return;
 
         source = context!.createBufferSource();
@@ -143,9 +147,9 @@ const theme = ({ onState = (state: { playing: boolean; blocked: boolean; failed:
         gain!.gain.linearRampToValueAtTime(LEVEL, context!.currentTime + FADE);
 
         report();
-    };
+    }
 
-    const stop = () => {
+    function stop() {
         if (!source) return;
 
         const ending = source;
@@ -160,25 +164,27 @@ const theme = ({ onState = (state: { playing: boolean; blocked: boolean; failed:
 
         source = null;
         report();
-    };
+    }
 
-        const unblock = () => {
+        function unblock() {
         if (!context || context.state !== 'suspended') return;
 
         context.resume().then(() => {
             play();
             report();
         }, () => {});
-    };
+    }
 
     const armed = ['keydown', 'pointerdown', 'touchstart', 'click'];
-    const onGesture = () => unblock();
+    function onGesture() {
+    return unblock();
+}
 
-    const fail = (reason) => {
+    function fail(reason) {
         failed = true;
         report();
         return reason;
-    };
+    }
 
     const started = (async () => {
         if (!AudioContextClass) return fail(new Error('no Web Audio'));
@@ -229,6 +235,6 @@ const theme = ({ onState = (state: { playing: boolean; blocked: boolean; failed:
             if (context) context.close();
         }
     };
-};
+}
 
 export { theme };

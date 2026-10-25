@@ -19,16 +19,17 @@ const MINIMUM_SECRET_BYTES = 32;
 
 class ProtocolError extends Error {}
 
-const mac = (secret, nonce, payload) =>
-    crypto
+function mac(secret, nonce, payload) {
+    return crypto
         .createHmac('sha256', secret)
         .update(nonce)
         .update(Buffer.from([0]))
         .update(payload, 'utf8')
         .digest('hex');
+}
 
 // "PONG\t1\t0\t0\t0\t0" + authenticator → "PONG\t1\t0\t0\t0\t0".
-const verify = (secret, nonce, line) => {
+function verify(secret, nonce, line) {
     const text = String(line).replace(/\r?\n$/, '');
     const cut = text.lastIndexOf('\t');
     if (cut <= 0) throw new ProtocolError('frame has no authenticator');
@@ -41,11 +42,14 @@ const verify = (secret, nonce, line) => {
         throw new ProtocolError('frame authentication failed');
     }
     return payload;
-};
+}
 
-const encode = (secret, nonce, payload) =>
-    `${payload}\t${mac(secret, nonce, payload)}\n`;
+function encode(secret, nonce, payload) {
+    return `${payload}\t${mac(secret, nonce, payload)}\n`;
+}
 
-const fields = (payload) => payload.split('\t');
+function fields(payload) {
+    return payload.split('\t');
+}
 
 module.exports = { PROTOCOL_VERSION, NONCE_BYTES, MINIMUM_SECRET_BYTES, ProtocolError, verify, encode, fields };

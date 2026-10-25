@@ -22,22 +22,26 @@ const MAX_PAYLOAD = 4096;
 // A connection is held open between commands, so a peer that vanished has to surface as an error.
 const KEEPALIVE_MS = 30000;
 
-const nameOf = (command) => NAMES[command] || `0x${(command >>> 0).toString(16)}`;
+function nameOf(command) {
+    return NAMES[command] || `0x${(command >>> 0).toString(16)}`;
+}
 
-const NOTHING = () => {};
+function NOTHING() {}
 
 // The magic is the command's one's complement, which is how a peer spots a desynchronized stream.
-const magicFor = (command) => (command ^ 0xFFFFFFFF) >>> 0;
+function magicFor(command) {
+    return (command ^ 0xFFFFFFFF) >>> 0;
+}
 
-const checksum = (data) => {
+function checksum(data) {
     if (!data) return 0;
 
     let total = 0;
     for (let index = 0; index < data.length; index++) total = (total + data[index]) & 0xFFFFFFFF;
     return total;
-};
+}
 
-const encodePacket = (command, arg1, arg2, payload) => {
+function encodePacket(command, arg1, arg2, payload) {
     // A string payload is sent NUL-terminated, which is what the daemon expects for service names.
     const data = typeof payload === 'string'
         ? Buffer.concat([Buffer.from(payload), Buffer.from([0])])
@@ -56,9 +60,10 @@ const encodePacket = (command, arg1, arg2, payload) => {
     if (length > 0) data.copy(packet, HEADER_BYTES);
 
     return packet;
-};
+}
 
-const decodeHeader = (header) => ({
+function decodeHeader(header) {
+    return ({
     command: header.readUInt32LE(0),
     arg1: header.readUInt32LE(4),
     arg2: header.readUInt32LE(8),
@@ -67,9 +72,10 @@ const decodeHeader = (header) => ({
     magic: header.readUInt32LE(20),
     data: null
 });
+}
 
 // Says what is wrong with a header rather than whether it is fine, so the failure can name itself.
-const headerFault = (header) => {
+function headerFault(header) {
     if (header.magic !== magicFor(header.command)) {
         return `${nameOf(header.command)} carried magic 0x${header.magic.toString(16)} where ` +
             `0x${magicFor(header.command).toString(16)} was due — the packet stream is out of step`;
@@ -81,7 +87,7 @@ const headerFault = (header) => {
     }
 
     return null;
-};
+}
 
 // Writes made before the daemon answers OPEN are held and flushed on `open`.
 class AdbStream extends Duplex {
@@ -340,7 +346,9 @@ class AdbConnection extends EventEmitter {
     }
 }
 
-const createConnection = (options) => new AdbConnection(options);
+function createConnection(options) {
+    return new AdbConnection(options);
+}
 
 module.exports = {
     createConnection, encodePacket, decodeHeader, checksum,

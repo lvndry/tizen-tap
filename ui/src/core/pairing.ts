@@ -8,29 +8,29 @@ const pattern = new RegExp(`^\\d{${DIGITS}}$`);
 // has been replaced and offering it again only spends the lockout allowance.
 //
 // Wrapped because a webview with storage disabled throws on access rather than returning null.
-const remembered = () => {
+function remembered() {
     try {
         const stored = window.localStorage.getItem(STORAGE_KEY);
         return pattern.test(stored || '') ? stored : '';
     } catch (e) {
         return '';
     }
-};
+}
 
-const remember = (pin) => {
+function remember(pin) {
     try {
         window.localStorage.setItem(STORAGE_KEY, pin);
     } catch (e) {
         // A convenience that cannot be saved is not worth failing over; the next reload simply asks.
     }
-};
+}
 
-const forget = () => {
+function forget() {
     try {
         window.localStorage.removeItem(STORAGE_KEY);
     } catch (e) {
         // Nothing to do: storage that cannot be written was never written.
     }
-};
+}
 
 export { remembered, remember, forget, DIGITS };

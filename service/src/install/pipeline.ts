@@ -11,7 +11,9 @@ const installer = require('./installer.ts');
 const { size, took, rate } = require('../obs/units.ts');
 const memory = require('../obs/memory.ts');
 
-const refuse = (code, message) => Object.assign(new Error(message), { code });
+function refuse(code, message) {
+    return Object.assign(new Error(message), { code });
+}
 
 // The package this service runs out of. A self-update is the one install where
 // uninstalling first would remove the very process doing the installing.
@@ -20,11 +22,11 @@ const SELF_PACKAGE_ID = 'GJBBYNLkgP';
 const QUIET = ['debug', 'info', 'ok', 'warn', 'err']
     .reduce((noop, level) => ({ ...noop, [level]: () => {} }), {});
 
-const createInstaller = ({ sdb, device, config, resigner, store, log }) => {
+function createInstaller({ sdb, device, config, resigner, store, log }) {
     const say = log ? log.on('pkg') : QUIET;
     const sdbSays = log ? log.on('sdb') : QUIET;
 
-    const install = async (request: any, report = (..._args: any[]) => {}) => {
+    async function install(request: any, report = (..._args: any[]) => {}) {
         if (store.select('installing')) {
             say.warn('refused: an install is already running');
             throw refuse('internal', 'An install is already running.');
@@ -217,9 +219,9 @@ const createInstaller = ({ sdb, device, config, resigner, store, log }) => {
 
             store.update({ installing: false });
         }
-    };
+    }
 
     return { install };
-};
+}
 
 module.exports = { createInstaller };

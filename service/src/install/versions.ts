@@ -5,7 +5,7 @@ const PATTERN = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?(?:\+[0-9
 
 const NUMERIC = /^\d+$/;
 
-const parse = (value) => {
+function parse(value) {
     const found = PATTERN.exec(String(value === null || value === undefined ? '' : value).trim());
 
     if (!found) return null;
@@ -14,12 +14,14 @@ const parse = (value) => {
         release: [Number(found[1]), Number(found[2] || 0), Number(found[3] || 0)],
         prerelease: found[4] ? found[4].split('.') : []
     };
-};
+}
 
-const clean = (value) => (parse(value) ? String(value).trim().replace(/^v/i, '') : null);
+function clean(value) {
+    return (parse(value) ? String(value).trim().replace(/^v/i, '') : null);
+}
 
 // Semver's rule for the tail: numeric identifiers compare as numbers, so rc.2 comes before rc.10.
-const comparePrerelease = (left, right) => {
+function comparePrerelease(left, right) {
     // Having a prerelease at all is what loses: 1.2.0-rc1 comes before 1.2.0.
     if (!left.length || !right.length) {
         if (left.length === right.length) return 0;
@@ -45,9 +47,9 @@ const comparePrerelease = (left, right) => {
     }
 
     return 0;
-};
+}
 
-const compare = (left, right) => {
+function compare(left, right) {
     const a = parse(left);
     const b = parse(right);
 
@@ -59,8 +61,10 @@ const compare = (left, right) => {
     }
 
     return comparePrerelease(a.prerelease, b.prerelease);
-};
+}
 
-const isNewer = (candidate, current) => compare(candidate, current) === 1;
+function isNewer(candidate, current) {
+    return compare(candidate, current) === 1;
+}
 
 module.exports = { parse, clean, compare, isNewer };

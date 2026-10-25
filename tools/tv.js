@@ -38,7 +38,7 @@ const overRelay = (ip, pin) => new Promise((resolve, reject) => {
     };
 
     const deadline = setTimeout(
-        () => finish(friendly(`Tizen Homebrew did not answer on ${ip}:${PORT}.`)),
+        () => finish(friendly(`Tizen Tap did not answer on ${ip}:${PORT}.`)),
         25000
     );
 
@@ -74,15 +74,15 @@ const overRelay = (ip, pin) => new Promise((resolve, reject) => {
 
         if (type === 'error') {
             clearTimeout(deadline);
-            return finish(friendly(`Tizen Homebrew refused: ${payload.message}`));
+            return finish(friendly(`Tizen Tap refused: ${payload.message}`));
         }
     });
 
     socket.on('error', (error) => {
         clearTimeout(deadline);
         finish(friendly(
-            `Could not reach Tizen Homebrew at ${ip}:${PORT} — ${error.message}\n\n` +
-            '  Open Tizen Homebrew on the TV; the service only runs while it is open.'
+            `Could not reach Tizen Tap at ${ip}:${PORT} — ${error.message}\n\n` +
+            '  Open Tizen Tap on the TV; the service only runs while it is open.'
         ));
     });
 });
@@ -130,7 +130,7 @@ const localAddressFor = (tvIp) => {
 };
 
 const whyNoDuid = (ip, pin) => `${ip} did not answer with a device id.\n\n` + (pin
-    ? '  The PIN goes through Tizen Homebrew, so the app has to be open on the TV —\n' +
+    ? '  The PIN goes through Tizen Tap, so the app has to be open on the TV —\n' +
       '  the service only runs while it is. The PIN changes every time it starts, so\n' +
       '  take the one on the screen now.'
     : '  That was asked over sdb, so sdbd is not accepting this machine. On the TV:\n' +
@@ -138,6 +138,6 @@ const whyNoDuid = (ip, pin) => `${ip} did not answer with a device id.\n\n` + (p
       `    Host PC IP  =  ${localAddressFor(ip) || '<this machine\'s IP>'}\n\n` +
       '  and restart it — that value is only read at startup.\n\n' +
       '  Or, if this set is already pinned to 127.0.0.1, read the code off its screen\n' +
-      '  and the question goes through Tizen Homebrew instead.');
+      '  and the question goes through Tizen Tap instead.');
 
 module.exports = { duidOf, overSdb, overRelay, describe, localAddressFor, whyNoDuid, PORT, DEVICE_API_PORT };

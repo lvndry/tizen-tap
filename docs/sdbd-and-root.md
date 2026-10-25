@@ -86,7 +86,7 @@ systemctl restart sdbd
 The service now carries this route itself ("the root channel"):
 
 - `tools/root-arm-build.js` (`npm run rootarm`) stages the samsung-tv-root
-  payloads into `service/vendor/root-arm/` — the launcher and agent DLLs,
+  payloads into `vendor/root-arm/` (repo root) — the launcher and agent DLLs,
 a fresh RSA-2048 keypair (only the public key ships), the signed tar that
   `sdbd-tarlauncher` runs as uid 0, and the channel's HMAC secret. Output is
   committed, so the TV only ever copies files.

@@ -20,18 +20,22 @@ const TYPES = {
     '.wav': 'audio/wav'
 };
 
-const TEXTUAL = (type) => type.startsWith('text/') || type.endsWith('javascript');
+function TEXTUAL(type) {
+    return type.startsWith('text/') || type.endsWith('javascript');
+}
 
 // The bundle puts the UI in a couple of places depending on how it was
 // flattened, so the first directory that exists wins.
-const findUiRoot = () => [
+function findUiRoot() {
+    return [
     // Bundled widget: __dirname is service/dist, UI is at <root>/ui/dist.
     join(__dirname, '..', '..', 'ui', 'dist'),
     // Development harness: __dirname is service/src, UI is at <root>/ui.
     join(__dirname, '..', '..', 'ui')
 ].find(existsSync) || null;
+}
 
-const register = (ctx, router) => {
+function register(ctx, router) {
     const { svc } = ctx;
     const uiRoot = findUiRoot();
 
@@ -56,6 +60,6 @@ const register = (ctx, router) => {
 
         bytes(response, readFileSync(file), TEXTUAL(type) ? `${type}; charset=utf-8` : type);
     });
-};
+}
 
 module.exports = { register };

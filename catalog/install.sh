@@ -1,20 +1,20 @@
 #!/bin/sh
-# One command from a bare machine to Tizen Homebrew on the television:
+# One command from a bare machine to Tizen Tap on the television:
 #
-#   curl -fsSL https://sushydev.github.io/tizen-homebrew/install.sh | sh
+#   curl -fsSL https://lvndry.github.io/tizen-tap/install.sh | sh
 #
 # It downloads the installer for this platform and runs it. The installer carries its own runtime,
 # so nothing has to be installed first and nothing is left behind.
 
 set -eu
 
-REPO=SushyDev/tizen-homebrew
+REPO=lvndry/tizen-tap
 
 case "$(uname -s)" in
     Darwin) platform=macos ;;
     Linux) platform=linux ;;
     *) echo "This installer covers macOS, Linux and Windows. For Windows use PowerShell:" >&2
-       echo "  irm https://sushydev.github.io/tizen-homebrew/install.ps1 | iex" >&2
+       echo "  irm https://lvndry.github.io/tizen-tap/install.ps1 | iex" >&2
        exit 1 ;;
 esac
 
@@ -24,7 +24,7 @@ case "$(uname -m)" in
     *) echo "No installer is built for $(uname -m)." >&2; exit 1 ;;
 esac
 
-asset="tizen-homebrew-installer-$platform-$cpu"
+asset="tizen-tap-installer-$platform-$cpu"
 
 directory=$(mktemp -d)
 trap 'rm -rf "$directory"' EXIT INT TERM

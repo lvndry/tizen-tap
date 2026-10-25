@@ -2,10 +2,10 @@
   "apps": [
     {
       "id": "homebrew",
-      "name": "Tizen Homebrew",
+      "name": "Tizen Tap",
       "description": "This app. Updates itself.",
       "packageId": "GJBBYNLkgP",
-      "source": { "type": "github", "ref": "SushyDev/tizen-homebrew" }
+      "source": { "type": "github", "ref": "lvndry/tizen-tap" }
     },
     {
       "id": "youtube",

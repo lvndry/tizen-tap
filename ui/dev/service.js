@@ -41,7 +41,7 @@ const log = ['debug', 'info', 'ok', 'warn', 'err'].reduce((writers, level) => ({
 }), {});
 
 const boot = () => {
-    log.info('svc', 'tizen homebrew dev starting');
+    log.info('svc', 'tizen tap dev starting');
     log.info('svc', `node ${process.version} on ${process.platform}/${process.arch}, pid ${process.pid}`);
     log.info('auth', `pairing pin ${PIN} — kept across restarts, so a reboot does not unpair every phone`);
     log.info('cat', 'origin https://cdn.example.com/homebrew/catalog.json');
@@ -78,11 +78,11 @@ const artwork = (letter, top, bottom) => `data:image/svg+xml;base64,${Buffer.fro
 const CATALOG = [
     {
         id: 'homebrew',
-        name: 'Tizen Homebrew',
+        name: 'Tizen Tap',
         description: 'This app. Updates itself.',
         packageId: 'GJBBYNLkgP',
         icon: artwork('H', '#7fe3ff', '#0a5f80'),
-        source: { type: 'github', ref: 'SushyDev/tizen-homebrew' }
+        source: { type: 'github', ref: 'lvndry/tizen-tap' }
     },
     {
         id: 'tube',
@@ -113,7 +113,7 @@ const CATALOG = [
 
 const INSTALLED = { GJBBYNLkgP: '0.1.0', tUb3Xq7Lm9: '0.1.0' };
 
-const RELEASED = { 'SushyDev/tizen-homebrew': '0.2.0', 'SushyDev/tube': '0.1.0' };
+const RELEASED = { 'lvndry/tizen-tap': '0.2.0', 'SushyDev/tube': '0.1.0' };
 
 const listed = (checked) => CATALOG.map((app) => {
     const installed = INSTALLED[app.packageId] || null;
@@ -141,7 +141,7 @@ const PACKAGES = {
         version: '10.9.1', isWgt: true, icon: artwork('J', '#aa5cd6', '#00a4dc')
     },
     '/media/usb1/downloads/TizenHomebrew.wgt': {
-        packageId: 'GJBBYNLkgP', appId: 'GJBBYNLkgP.TizenHomebrew', name: 'Tizen Homebrew',
+        packageId: 'GJBBYNLkgP', appId: 'GJBBYNLkgP.TizenHomebrew', name: 'Tizen Tap',
         version: '0.1.0', isWgt: true, icon: null
     }
 };

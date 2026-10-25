@@ -1,21 +1,19 @@
-// Service entry point. Tizen calls onStart when the service boots (and
-// onRequest when something launches into an already-running one); a desktop
-// run with no `tizen` object starts directly, so the same code serves as the
-// development harness.
+// Service entry point: Tizen calls onStart when the service boots, onRequest
+// for launches into a running one; a desktop run without a `tizen` object
+// starts directly, so the same file is the development harness.
 //
-// This file is the composition root: it builds the long-lived collaborators
-// (log, store, catalog, installer, relay, device probe, repl), hands them to
-// the route modules and the socket layer, and opens the HTTP server. The
-// HTTP surface itself lives in routes/*, one file per concern:
+// Composition root. It opens the pairing/health HTTP server on :8091, the
+// root channel on loopback :8092 (see root/, and AGENTS.md "The HTTP
+// surface"), revives the companions it watches (stremio, bonsoir), wires
+// the install pipeline (fetch from the origin baked at build time, re-sign,
+// install over loopback sdb), and on a television arms the root channel
+// itself, with retries, once the sdb probe settles. Routes live in routes/*,
+// one file per concern; the UI catch-all registers last, after every other
+// route.
 //
-//   routes/status.js     read-only facts, split by who is asking
-//   routes/install.js    the mutating surface — installs and certificates
-//   routes/lifecycle.js  /restart and /shutdown
-//   routes/dev.js        the PIN-gated developer endpoints (dev builds only)
-//   routes/ui.js         the catch-all that serves the bundled UI pages
-//
-// The catch-all is registered last, after every other route.
-
+// The pairing PIN is minted once, on first start, and persisted in the
+// service's config — see config.pairingPin — so a reboot does not unpair
+// every phone.
 'use strict';
 
 const { createServer } = require('http');
@@ -72,14 +70,14 @@ try {
 // A start within a few minutes of the TV's own boot is a boot start; later
 // starts are updates or manual relaunches. /proc/uptime is the TV's own
 // clock, so no NTP is involved.
-const isBootStart = () => {
+function isBootStart() {
     try {
         const uptime = Number(require('fs').readFileSync('/proc/uptime', 'utf8').split(' ')[0]);
         return uptime < 180;
     } catch (e) {
         return false;
     }
-};
+}
 
 // Companions this service keeps alive on the TV, in launch order:
 //
@@ -99,10 +97,11 @@ const isBootStart = () => {
 // Every start of this service walks the list; each companion checks twice —
 // immediately, then a minute later — because the services boot in parallel
 // and the first look can race the other start.
-const reviveCompanions = () => {
+function reviveCompanions() {
     const companion = log.on(Facility.SVC);
 
-    const probePort = (port: number) => new Promise((resolve) => {
+    function probePort(port: number) {
+    return new Promise((resolve) => {
         const req = require('http').get(
             { host: '127.0.0.1', port, timeout: 1500 },
             (res) => { resolve(true); res.resume(); res.on('end', () => {}); }
@@ -110,8 +109,9 @@ const reviveCompanions = () => {
         req.on('timeout', () => { req.destroy(); resolve(false); });
         req.on('error', () => resolve(false));
     });
+}
 
-    const launch = (appId: string, name: string, label: string) => {
+    function launch(appId: string, name: string, label: string) {
         // Launch the app, not the service: on this firmware a cross-app
         // launch of a service id is a silent no-op, while the app's page
         // starts the service for it through launchAppControl.
@@ -122,14 +122,13 @@ const reviveCompanions = () => {
         } catch (e) {
             companion.info(`${name} was down (${label}) — ${e.message || e} (reinstall it to restore)`);
         }
-    };
+    }
 
-    const schedule = (revive: (label: string) => Promise<void>,
-        windows: ReadonlyArray<readonly [number, string]> = [[3000, 'first check'], [60_000, 'second check']]) => {
+    function schedule(revive: (label: string) => Promise<void>, windows: ReadonlyArray<readonly [number, string]> = [[3000, 'first check'], [60_000, 'second check']]) {
         for (const [delay, label] of windows) {
             setTimeout(async () => { await revive(label); }, delay);
         }
-    };
+    }
 
     schedule(async (label) => {
         if (await probePort(11470)) return;
@@ -143,16 +142,16 @@ const reviveCompanions = () => {
         isBootStart()
             ? [[3000, 'early check'], [60_000, 'second check'], [120_000, 'post-launcher relaunch'], [240_000, 'late relaunch']]
             : [[3000, 'early check'], [60_000, 'second check']]);
-};
+}
 
 
-const start = () => {
+function start() {
     const startedAt = new Date().toISOString();
     const secret = DEVELOPER ? pin.DEVELOPER_PIN : config.pairingPin();
 
     const svc = log.on(Facility.SVC);
 
-    svc.info(`tizen homebrew ${BUILD} starting`);
+    svc.info(`tizen tap ${BUILD} starting`);
     svc.info(`${runtime.summary()}, pid ${process.pid}`);
 
     const devLog = log.on(Facility.DEV);
@@ -208,15 +207,15 @@ const start = () => {
     if (relay.enabled) log.on(Facility.RELAY).warn('the command relay is ON from stored configuration');
 
     // Loaded on first use so a television that never installs anything does not parse node-forge.
-    const resigner = async () => {
+    async function resigner() {
         const { resign } = require('./install/resign.ts');
 
         return (archive) => resign(archive, config.read());
-    };
+    }
 
     const installer = createInstaller({ sdb, device, config, resigner, store, log });
 
-    const announce = (state, previous) => {
+    function announce(state, previous) {
         if (!previous) {
             devLog.info(state.onTv
                 ? `tizen ${state.platformVersion || 'unknown'}` +
@@ -242,13 +241,13 @@ const start = () => {
         }
 
         return state;
-    };
+    }
 
     // Filled in once the socket server is up, at the end of this function. The sweep below is the
     // only thing that learns something without being asked, so it is the only thing that pushes.
     let sockets: any = null;
 
-    const refreshDevice = async () => {
+    async function refreshDevice() {
         // An install has the connection; probing across it would only add commands to what sdbd is doing.
         if (store.select('installing')) return store.select('device');
 
@@ -268,17 +267,18 @@ const start = () => {
         }
 
         return announce(state, previous);
-    };
+    }
 
     refreshDevice();
     if (device.onTv) setInterval(refreshDevice, 15000);
 
     const LOOPBACK = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
 
-    const fromLoopback = (request) =>
-        LOOPBACK.indexOf((request.socket && request.socket.remoteAddress) || '') !== -1;
+    function fromLoopback(request) {
+    return LOOPBACK.indexOf((request.socket && request.socket.remoteAddress) || '') !== -1;
+}
 
-    const authorise = (presented) => {
+    function authorise(presented) {
         const lockout = store.select('lockout');
 
         if (pin.isLocked(lockout)) {
@@ -293,7 +293,7 @@ const start = () => {
 
         store.update({ lockout: pin.recordSuccess() });
         return { ok: true };
-    };
+    }
 
     const ctx: any = {
         build: BUILD,
@@ -398,7 +398,7 @@ const start = () => {
     // attempt is retried a few times; /dev/root/arm remains manual after.
     if (device.onTv) {
         setTimeout(() => {
-            const tryArm = (attemptsLeft) => {
+            function tryArm(attemptsLeft) {
                 if (root.channel.status().root) return;
 
                 root.arming = true;
@@ -409,7 +409,7 @@ const start = () => {
                     svc.warn(`root arm: ${error.message}`);
                     if (attemptsLeft > 0) setTimeout(() => tryArm(attemptsLeft - 1), 30000);
                 });
-            };
+            }
             tryArm(5);
         }, 15000);
     }
@@ -422,7 +422,7 @@ const start = () => {
     reviveCompanions();
 
     return { server, port: PORT, pin: secret, build: BUILD };
-};
+}
 
 // Tizen's service runtime calls onStart; a service exporting anything else loads and never listens.
 module.exports.onStart = start;

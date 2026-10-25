@@ -20,19 +20,21 @@ const AT_ONCE = 3;
 
 const quiet = { info: () => {}, ok: () => {}, warn: () => {}, err: () => {}, debug: () => {} };
 
-const askable = (entry) => entry.source.type === 'github';
+function askable(entry) {
+    return entry.source.type === 'github';
+}
 
 // `packages` and the GitHub lookup are handed in so this can be exercised off a television.
-const createUpdates = ({ packages, log, config, latestRelease = sources.latestRelease }) => {
+function createUpdates({ packages, log, config, latestRelease = sources.latestRelease }) {
     const say = log ? log.on('cat') : quiet;
 
     // repo -> { version, at }. A remembered null is "asked, told nothing", not "never asked".
     const remembered = {};
 
-    const fresh = (repo) => {
+    function fresh(repo) {
         const known = remembered[repo];
         return known && Date.now() - known.at < CACHE_TTL ? known : null;
-    };
+    }
 
     // Package id -> installed version, kept because getPackagesInfo takes six seconds on a full set.
     let holding: any = null;
@@ -41,7 +43,7 @@ const createUpdates = ({ packages, log, config, latestRelease = sources.latestRe
 
         let generation = 0;
 
-    const askTheSet = () => {
+    function askTheSet() {
         if (asking) return asking;
 
         const era = generation;
@@ -86,29 +88,29 @@ const createUpdates = ({ packages, log, config, latestRelease = sources.latestRe
         );
 
         return asking;
-    };
+    }
 
-    const installedNow = async () => {
+    async function installedNow() {
         if (!holding) return askTheSet();
 
         if (Date.now() - holding.at >= INSTALLED_TTL) askTheSet();
 
         return holding.map;
-    };
+    }
 
-    const prime = () => {
+    function prime() {
         askTheSet();
-    };
+    }
 
     // Stamped stale rather than dropped, so the next read is served immediately and refreshes behind it.
-    const changed = () => {
+    function changed() {
         generation += 1;
         if (holding) holding = { map: holding.map, at: 0 };
         askTheSet();
-    };
+    }
 
     // `checked` separates "not asked yet" from "asked, and there are no releases".
-    const mark = async (entries) => {
+    async function mark(entries) {
         const installed = await installedNow();
 
         return entries.map((entry) => {
@@ -126,9 +128,9 @@ const createUpdates = ({ packages, log, config, latestRelease = sources.latestRe
                 update: versions.isNewer(available, current)
             };
         });
-    };
+    }
 
-    const ask = async (repo) => {
+    async function ask(repo) {
         const found = await (async () => {
             try {
                 const release = await latestRelease(repo);
@@ -149,10 +151,10 @@ const createUpdates = ({ packages, log, config, latestRelease = sources.latestRe
         })();
 
         remembered[repo] = { version: found, at: Date.now() };
-    };
+    }
 
     // `id` re-asks one entry even when the answer is in hand; without one, everything stale.
-    const check = async (entries, { id = null } = {}) => {
+    async function check(entries, { id = null } = {}) {
         const wanted = entries.filter((entry) => askable(entry) &&
             (id ? entry.id === id : !fresh(entry.source.ref)));
 
@@ -188,9 +190,9 @@ const createUpdates = ({ packages, log, config, latestRelease = sources.latestRe
             `${entry.name} ${entry.installed} is installed and ${entry.available} is out`));
 
         return marked;
-    };
+    }
 
     return { mark, check, prime, changed };
-};
+}
 
 module.exports = { createUpdates, CACHE_TTL, AT_ONCE, INSTALLED_TTL };

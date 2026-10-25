@@ -43,7 +43,7 @@ const main = async () => {
         throw friendly(
             'Which television?\n\n' +
             '  npm run mint -- <tv-ip>              ask the TV over sdb\n' +
-            '  npm run mint -- <tv-ip> <pin>        ask Tizen Homebrew on the TV\n' +
+            '  npm run mint -- <tv-ip> <pin>        ask Tizen Tap on the TV\n' +
             '  npm run mint -- --duid <DUID>        when you already know it\n' +
             '  npm run mint -- --duid <A>,<B>,<C>   several at once\n\n' +
             '  Add --public to mint a public certificate instead of the default Partner one.'
@@ -62,7 +62,7 @@ const main = async () => {
 
     const keeping = !argv.has('--new-author') && Boolean(existing.password) && existsSync(existing.author) && covered.length > 0;
 
-    if (ip && !listed) ui.info('asked', `${ip} ${pin ? 'through Tizen Homebrew' : 'over sdb'}`);
+    if (ip && !listed) ui.info('asked', `${ip} ${pin ? 'through Tizen Tap' : 'over sdb'}`);
 
     ui.info('adding', asked.map((device) => device + (covered.indexOf(device) === -1 ? '' : ' (already covered)')).join(', '));
     ui.info('covering', devices.join(', '));

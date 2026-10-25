@@ -83,7 +83,7 @@ const run = async () => {
             announced.length === 1 &&
             announced[0][0] === 'resigning' &&
             announced[0][1].packageId === 'GJBBYNLkgP' &&
-            announced[0][1].name === 'Tizen Homebrew',
+            announced[0][1].name === 'Tizen Tap',
             JSON.stringify(announced));
 
         check('with the icon out of the archive on it',
@@ -197,7 +197,7 @@ const run = async () => {
 
         check('and the package still said what it was first',
             announced.length === 1 && announced[0][0] === 'resigning' &&
-            announced[0][1].name === 'Tizen Homebrew',
+            announced[0][1].name === 'Tizen Tap',
             JSON.stringify(announced));
     }
 

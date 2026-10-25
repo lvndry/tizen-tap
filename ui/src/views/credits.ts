@@ -7,7 +7,7 @@
 //
 // `at` is written without a scheme: nothing here is clickable, it is typed into a phone.
 const CREDITS = [
-    { note: 'Tizen Homebrew is assembled almost entirely out of other people’s work.' },
+    { note: 'Tizen Tap is assembled almost entirely out of other people’s work.' },
 
     { head: 'Prior work on Tizen' },
     { name: 'TizenBrew', by: 'reisxd', at: 'github.com/reisxd/TizenBrew' },

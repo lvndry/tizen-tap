@@ -17,18 +17,20 @@ const MAX_COMMAND = 8 * 1024;
 const EXEC_TIMEOUT_MS = 30000;
 const EXEC_TIMEOUT_MAX_MS = 300000;
 
-const preview = (source) => source.replace(/\s+/g, ' ').slice(0, 200);
+function preview(source) {
+    return source.replace(/\s+/g, ' ').slice(0, 200);
+}
 
-const register = (ctx, router) => {
+function register(ctx, router) {
     const { sdb, root } = ctx;
 
-    const gate = (request, response) => {
+    function gate(request, response) {
         const verdict = ctx.authorise(request.headers['x-homebrew-pin']);
         if (verdict.ok) return true;
 
         failure(response, verdict.code === ErrorCode.LOCKED_OUT ? 429 : 403, verdict.code, verdict.message);
         return false;
-    };
+    }
 
     router.on.get('/dev/root', (request, response) => {
         if (!gate(request, response)) return;
@@ -83,6 +85,6 @@ const register = (ctx, router) => {
             json(response, { ok: false, error: error.message });
         }
     });
-};
+}
 
 module.exports = { register };

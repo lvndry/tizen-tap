@@ -3,7 +3,8 @@
 import { html } from '../core/view.ts';
 import { wordmark } from './television.ts';
 
-const masthead = (state) => html`
+function masthead(state) {
+    return html`
   <div class="bar">
     ${wordmark()}
     <span class="inline">
@@ -13,9 +14,11 @@ const masthead = (state) => html`
               title="The Homebrew Channel theme">${state.themeOn ? 'theme · on' : 'theme · off'}</button>
     </span>
   </div>`;
+}
 
 // The only thing on screen until it is done, dressed as the other half of the code shown on the TV.
-const pairing = (state) => (state.restoring ? html`
+function pairing(state) {
+    return (state.restoring ? html`
   <div class="state state-warn">
     <span class="state-head">Pairing</span>
     <span class="small">Offering the code this phone paired with last.</span>
@@ -37,15 +40,18 @@ const pairing = (state) => (state.restoring ? html`
            </div>`
         : ''}
   </div>`);
+}
 
-const status = (state) => {
+function status(state) {
     const { device } = state;
 
-    const band = (tone, head, body) => html`
+    function band(tone, head, body) {
+    return html`
       <div class="state state-${tone}">
         <span class="state-head">${head}</span>
         <span class="small">${body}</span>
       </div>`;
+}
 
     if (!device) return band('warn', 'Checking', 'Asking the TV about itself.');
 
@@ -64,22 +70,29 @@ const status = (state) => {
     return band('warn', 'No sdb route',
         html`Set <span class="mono ink">Host PC IP</span> to <span class="mono ink">127.0.0.1</span>
              in Apps › 12345 › Settings, then restart the TV — that value is only read at startup.`);
-};
+}
 
-const weight = (bytes) => (bytes >= 1024 * 1024
+function weight(bytes) {
+    return (bytes >= 1024 * 1024
     ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
     : `${Math.round(bytes / 1024)} KB`);
+}
 
-const monogram = (name) => String(name || '?').trim().charAt(0) || '?';
+function monogram(name) {
+    return String(name || '?').trim().charAt(0) || '?';
+}
 
-const tile = (app, hero = false) => html`
+function tile(app, hero = false) {
+    return html`
   <span class="tile${hero ? ' tile-hero' : ''}">
     <span class="tile-mark">${monogram(app.name || app.packageId)}</span>
     ${app.icon ? html`<img class="tile-art" src="${app.icon}" alt="">` : ''}
   </span>`;
+}
 
 // Spans throughout: a USB row is a `<button>`, whose content model is phrasing content only.
-const identity = (app, below: string | { __markup: string } = '', hero = false) => html`
+function identity(app, below: string | { __markup: string } = '', hero = false) {
+    return html`
   <span class="ident">
     ${tile(app, hero)}
     <span class="stack stack-tight">
@@ -90,6 +103,7 @@ const identity = (app, below: string | { __markup: string } = '', hero = false) 
       ${below}
     </span>
   </span>`;
+}
 
 const TABS = [
     ['catalog', 'apps'],
@@ -100,21 +114,25 @@ const TABS = [
     ['relay', 'shell']
 ];
 
-const tabs = (state) => html`
+function tabs(state) {
+    return html`
   <div class="tabs" role="tablist">
     ${TABS.map(([id, label]) => html`
       <button class="tab" role="tab" aria-selected="${state.tab === id}"
               data-focus="tab:${id}" data-on-click="tab:${id}">${label}</button>`)}
   </div>`;
+}
 
-const section = (label, body, footer: string | { __markup: string } = '') => html`
+function section(label, body, footer: string | { __markup: string } = '') {
+    return html`
   <div class="glass pad stack stack-snug">
     <span class="label">${label}</span>
     ${body}
     ${footer}
   </div>`;
+}
 
-const catalogued = (app) => {
+function catalogued(app) {
     if (!app.installed) return html`<span class="small truncate">${app.description || app.source.ref}</span>`;
 
     const held = html`<span class="mono">${app.installed}</span>`;
@@ -126,20 +144,25 @@ const catalogued = (app) => {
     return html`<span class="small truncate">${held} installed${app.checked
         ? (app.available ? ' · up to date' : ' · no release found')
         : ''}</span>`;
-};
+}
 
-const action = (app) => (app.installed
+function action(app) {
+    return (app.installed
     ? html`<button class="btn ${app.update ? 'btn-signal' : 'btn-ghost'}"
                    data-focus="app:${app.id}" data-on-click="install:catalog:${app.id}"
                    ${app.update ? '' : 'disabled'}>update</button>`
     : html`<button class="btn btn-ghost" data-focus="app:${app.id}"
                    data-on-click="install:catalog:${app.id}">install</button>`);
+}
 
-const recheck = (app, checking) => (app.source.type !== 'github' ? '' : html`
+function recheck(app, checking) {
+    return (app.source.type !== 'github' ? '' : html`
   <button class="btn btn-quiet" data-focus="check:${app.id}" data-on-click="check:${app.id}"
           ${checking ? 'disabled' : ''}>${checking === app.id ? 'checking…' : 'check'}</button>`);
+}
 
-const catalog = (state) => section('Available', state.catalog.length === 0
+function catalog(state) {
+    return section('Available', state.catalog.length === 0
     ? html`<p class="small">Nothing listed yet. Use upload, github or url.</p>`
     : html`<div class="list">
         ${state.catalog.map((app) => html`
@@ -157,9 +180,10 @@ const catalog = (state) => section('Available', state.catalog.length === 0
               ${state.checking ? 'disabled' : ''}>${state.checking === 'all'
         ? 'checking…' : 'check all'}</button>
     </span>`);
+}
 
 // The archive is on the phone already, so it is opened and the well shows the app rather than the filename.
-const chosen = (state) => {
+function chosen(state) {
     if (!state.file) {
         return html`
           <span class="mono small">choose a file</span>
@@ -176,9 +200,10 @@ const chosen = (state) => {
 
     return identity(app, html`
       <span class="mono micro truncate">${state.reading ? 'reading the package…' : facts}</span>`, true);
-};
+}
 
-const upload = (state) => section('Upload a package', html`
+function upload(state) {
+    return section('Upload a package', html`
     <p class="small">Send a .wgt straight from this device. Nothing needs hosting.</p>
 
     <label for="file" class="drop${state.file ? ' drop-filled' : ''}">${chosen(state)}</label>
@@ -189,8 +214,10 @@ const upload = (state) => section('Upload a package', html`
         ? html`<button class="btn btn-signal btn-wide" data-focus="upload" data-on-click="upload"
                        ${state.uploading !== null ? 'disabled' : ''}>install</button>`
         : '');
+}
 
-const remoteSource = ({ label, id, placeholder, action, hint, value }) => section(label, html`
+function remoteSource({ label, id, placeholder, action, hint, value }) {
+    return section(label, html`
     <div class="entry">
       <input class="field" id="${id}" placeholder="${placeholder}" value="${value || ''}"
              data-focus="${id}" data-on-enter="${action}"
@@ -198,18 +225,24 @@ const remoteSource = ({ label, id, placeholder, action, hint, value }) => sectio
       <button class="btn" data-focus="${id}:go" data-on-click="${action}">install</button>
     </div>
     <p class="small">${hint}</p>`);
+}
 
-const fromGitHub = (state) => remoteSource({
+function fromGitHub(state) {
+    return remoteSource({
     label: 'GitHub release', id: 'gh', placeholder: 'owner/repo', action: 'install:github',
     hint: 'The newest release’s .wgt asset. Public repositories only.', value: state.github
 });
+}
 
-const fromUrl = (state) => remoteSource({
+function fromUrl(state) {
+    return remoteSource({
     label: 'Direct URL', id: 'url', placeholder: 'https://…/App.wgt', action: 'install:url',
     hint: 'Must be https.', value: state.url
 });
+}
 
-const usb = (state) => section('Attached storage', html`
+function usb(state) {
+    return section('Attached storage', html`
     <span class="mono small truncate">${state.usbPath}</span>
     <div class="list">
       ${state.usb.map((entry) => (entry.isDirectory
@@ -230,8 +263,10 @@ const usb = (state) => section('Attached storage', html`
               ].filter(Boolean).join(' · ')}</span>`)}
           </button>`))}
     </div>`);
+}
 
-const relay = (state) => section('Command relay', html`
+function relay(state) {
+    return section('Command relay', html`
     <p class="small">Developer Mode is pinned to loopback, so no other machine can reach this
       TV’s sdb daemon. The channel runs on the TV, so it can — and can relay for you.</p>
 
@@ -254,10 +289,13 @@ const relay = (state) => section('Command relay', html`
                 ${state.relayBusy ? 'disabled' : ''}>run</button>
       </div>
       <pre class="log shell">${state.relayOutput || ' '}</pre>` : ''}`);
+}
 
 const PANELS = { catalog, upload, github: fromGitHub, url: fromUrl, usb, relay };
 
-const panel = (state) => PANELS[state.tab](state);
+function panel(state) {
+    return PANELS[state.tab](state);
+}
 
 const PHASES = ['probing', 'fetching', 'resigning', 'staging', 'installing'];
 
@@ -269,7 +307,7 @@ const PHASE_WORDS = {
     installing: 'Installing'
 };
 
-const outcome = (state) => {
+function outcome(state) {
     if (state.phase) {
         const step = PHASES.indexOf(state.phase) + 1;
         const app = state.identity;
@@ -314,6 +352,6 @@ const outcome = (state) => {
     }
 
     return html``;
-};
+}
 
 export { masthead, pairing, status, tabs, panel, outcome };

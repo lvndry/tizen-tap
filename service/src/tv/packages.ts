@@ -7,11 +7,17 @@ const { readdir, readFile } = require('fs').promises;
 const { join } = require('path');
 
 // `typeof` and not `globalThis.tizen`: a runtime may hand it over as a binding.
-const platform = () => (typeof tizen !== 'undefined' ? tizen : undefined);
+function platform() {
+    return (typeof tizen !== 'undefined' ? tizen : undefined);
+}
 
-const onTv = () => platform() !== undefined;
+function onTv() {
+    return platform() !== undefined;
+}
 
-const offTv = () => Object.assign(new Error('Only available on a TV.'), { code: 'notOnTv' });
+function offTv() {
+    return Object.assign(new Error('Only available on a TV.'), { code: 'notOnTv' });
+}
 
 const APPS_ROOT = '/opt/usr/apps';
 
@@ -19,17 +25,17 @@ const MANIFESTS = ['res/wgt/config.xml', 'tizen-manifest.xml'];
 
 const NAMING_DEADLINE = 4000;
 
-const attribute = (xml, name) => {
+function attribute(xml, name) {
     const found = new RegExp(`<(?:widget|manifest)\\b[^>]*\\b${name}="([^"]*)"`).exec(xml);
     return found ? found[1] : null;
-};
+}
 
-const elementText = (xml, name) => {
+function elementText(xml, name) {
     const found = new RegExp(`<${name}\\b[^>]*>([^<]*)</${name}>`).exec(xml);
     return found ? found[1].trim() : null;
-};
+}
 
-const describe = async (id, root) => {
+async function describe(id, root) {
     for (const relative of MANIFESTS) {
         try {
             const xml = await readFile(join(root, id, relative), 'utf8');
@@ -40,13 +46,14 @@ const describe = async (id, root) => {
     }
 
     return { version: null, name: null };
-};
+}
 
 let naming = true;
 
 let reported = false;
 
-const named = (say) => new Promise<Map<string, any>>((resolve) => {
+function named(say) {
+    return new Promise<Map<string, any>>((resolve) => {
     const api = platform();
 
     if (!naming || !api || !api.application || typeof api.application.getAppsInfo !== 'function') {
@@ -55,7 +62,7 @@ const named = (say) => new Promise<Map<string, any>>((resolve) => {
 
     let settled = false;
 
-    const give = (value, note?: string) => {
+    function give(value, note?: string) {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
@@ -64,11 +71,12 @@ const named = (say) => new Promise<Map<string, any>>((resolve) => {
             if (say) say.info(`tizen.application.getAppsInfo ${note} — falling back to manifests`);
         }
         resolve(value);
-    };
+    }
 
     const timer = setTimeout(() => give(new Map(), `did not answer in ${NAMING_DEADLINE}ms`), NAMING_DEADLINE);
 
-    const collapse = (apps) => (apps || []).reduce((byPackage, app) => {
+    function collapse(apps) {
+    return (apps || []).reduce((byPackage, app) => {
         const id = app && (app.packageId || app.id);
         const held = id ? byPackage.get(id) : null;
 
@@ -78,6 +86,7 @@ const named = (say) => new Promise<Map<string, any>>((resolve) => {
 
         return byPackage;
     }, new Map());
+}
 
     try {
         (api.application.getAppsInfo as any)(
@@ -88,11 +97,12 @@ const named = (say) => new Promise<Map<string, any>>((resolve) => {
         give(new Map(), `threw (${error.message})`);
     }
 });
+}
 
 // The directory listing alone decides what is installed: getPackagesInfo blocks the JS thread for about
 // five minutes on a QE65S93DAT, and `pkgcmd -l` over sdb returns nothing at all. getAppsInfo is a
 // different subsystem, asked only to fill in names and versions.
-const listOnDisk = async (options) => {
+async function listOnDisk(options) {
     const opts = options || {};
     const root = opts.appsRoot || APPS_ROOT;
     const say = opts.say || null;
@@ -123,11 +133,13 @@ const listOnDisk = async (options) => {
     }
 
     return found;
-};
+}
 
-const list = (options) => (onTv() ? listOnDisk(options) : Promise.reject(offTv()));
+function list(options) {
+    return (onTv() ? listOnDisk(options) : Promise.reject(offTv()));
+}
 
-const launch = (appId) => {
+function launch(appId) {
     if (!onTv()) return Promise.reject(offTv());
 
     return new Promise((resolve, reject) => {
@@ -141,6 +153,6 @@ const launch = (appId) => {
             reject(Object.assign(new Error(`Could not launch ${appId}: ${error.message}`), { code: 'internal' }));
         }
     });
-};
+}
 
 module.exports = { list, launch, onTv, APPS_ROOT, NAMING_DEADLINE };

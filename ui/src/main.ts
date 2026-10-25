@@ -204,20 +204,20 @@ const { send } = connect({
     }
 });
 
-const value = (id) => {
+function value(id) {
     const element = document.getElementById(id);
     return element ? (element as HTMLInputElement).value.trim() : '';
-};
+}
 
-const beginInstall = (source, reference) => {
+function beginInstall(source, reference) {
     // The identity goes with it, or one app's icon sits above another app's progress bar.
     store.update({ error: null, done: null, phase: 'probing', identity: null });
     send(Send.install, { source, ref: reference });
-};
+}
 
 // Read now rather than after the upload, because the value of it is seeing what this is before spending a
 // minute of wifi on it.
-const chooseFile = async (file) => {
+async function chooseFile(file) {
     store.update({ file, identity: null, reading: Boolean(file), error: null, done: null });
 
     if (!file) return;
@@ -228,7 +228,7 @@ const chooseFile = async (file) => {
     if (store.get().file !== file) return;
 
     store.update({ identity: app, reading: false });
-};
+}
 
 delegate({
     pin: (element) => {

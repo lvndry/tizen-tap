@@ -20,16 +20,16 @@ const MIME = {
     webp: 'image/webp'
 };
 
-const inflateRaw = async (bytes) => {
+async function inflateRaw(bytes) {
     const expanded = new Response(bytes).body!
         .pipeThrough(new DecompressionStream('deflate-raw'));
 
     return new Uint8Array(await new Response(expanded).arrayBuffer());
-};
+}
 
 // Local file headers walked in order rather than the central directory, because the end of the
 // file is exactly the part this deliberately does not have.
-const readFromZip = async (bytes, wanted) => {
+async function readFromZip(bytes, wanted) {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
     let cursor = 0;
@@ -64,22 +64,22 @@ const readFromZip = async (bytes, wanted) => {
     }
 
     return null;
-};
+}
 
-const attribute = (xml, tag, key) => {
+function attribute(xml, tag, key) {
     const element = new RegExp(`<${tag}\\b[^>]*>`).exec(xml);
     if (!element) return null;
 
     const found = new RegExp(`\\b${key}="([^"]*)"`).exec(element[0]);
     return found ? found[1] : null;
-};
+}
 
-const text = (xml, tag) => {
+function text(xml, tag) {
     const found = new RegExp(`<${tag}\\b[^>]*>([^<]*)</${tag}>`).exec(xml);
     return found ? found[1].trim() : null;
-};
+}
 
-const base64 = (bytes) => {
+function base64(bytes) {
     let binary = '';
 
     for (let at = 0; at < bytes.length; at += 0x8000) {
@@ -87,9 +87,9 @@ const base64 = (bytes) => {
     }
 
     return btoa(binary);
-};
+}
 
-const iconOf = async (bytes, named) => {
+async function iconOf(bytes, named) {
     const candidates = [named, named ? `shared/res/${named}` : null, 'icon.png']
         .filter(Boolean)
         .filter((path, at, all) => all.indexOf(path) === at);
@@ -105,9 +105,9 @@ const iconOf = async (bytes, named) => {
     }
 
     return null;
-};
+}
 
-const readPackage = async (file) => {
+async function readPackage(file) {
     if (typeof DecompressionStream === 'undefined') return null;
 
     const bytes = await (async () => {
@@ -157,6 +157,6 @@ const readPackage = async (file) => {
     }
 
     return null;
-};
+}
 
 export { readPackage };

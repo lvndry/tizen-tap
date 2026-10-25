@@ -15,7 +15,7 @@ pure-JS WebTorrent on Tizen's Node 18, zero native modules, cache capped at
 ## What is already automatic
 
 - **Boots with the TV.** `on-boot` starts it after every standby wake.
-- **Revives itself.** The Tizen Homebrew service probes port 11470 on every
+- **Revives itself.** The Tizen Tap service probes port 11470 on every
   start (at 3 s and 60 s) and launches this app if the port is silent, so a
   dead server comes back the next time anything touches homebrew.
 - **Bounded disk use.** The torrent cache lives under
@@ -34,7 +34,7 @@ pure-JS WebTorrent on Tizen's Node 18, zero native modules, cache capped at
         -H "x-homebrew-pin: <pin>" http://<tv-ip>:8091/install
    ```
 
-   Requires Tizen Homebrew to be installed on the TV (its `:8091`).
+   Requires Tizen Tap to be installed on the TV (its `:8091`).
 
 2. **Point the Stremio app at it.** In the Stremio app: *Settings →
    Streaming server* → `<tv-ip>:11470`.
@@ -54,8 +54,8 @@ That's the whole setup. From then on the TV streams with nothing else on.
 
 | Symptom | Meaning | Fix |
 | --- | --- | --- |
-| `<tv-ip>:11470` = 000, homebrew = 000 | TV off, or cold boot with nothing started | Open Tizen Homebrew once, or `npm run restart` from samsung-tv-toolbox |
-| 000, homebrew = 200 | Server process died | Open Tizen Homebrew again — the revive fires on its start. Still dead? The package may be gone (TV self-updates have been known to wipe it): re-run step 1 |
+| `<tv-ip>:11470` = 000, homebrew = 000 | TV off, or cold boot with nothing started | Open Tizen Tap once, or `npm run restart` from samsung-tv-toolbox |
+| 000, homebrew = 200 | Server process died | Open Tizen Tap again — the revive fires on its start. Still dead? The package may be gone (TV self-updates have been known to wipe it): re-run step 1 |
 | App can't connect, `:11470` = 307 from the LAN | App pointed at `127.0.0.1`, or the TV's IP changed | Re-check the app's server address (step 2); check the reservation (step 3) |
 
 The server writes a boot log to `/home/owner/.stremio-server-boot.log` when

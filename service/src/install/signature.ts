@@ -9,9 +9,11 @@ const { createHash, createSign } = require('crypto');
 const authorPropDigest = 'aXbSAVgmAz0GsBUeZ1UmNDRrxkWhDUVGb45dZcNRq429wX3X+x6kaXT3NdNDTSNVTU+ypkysPMGvQY10fG1EWQ==';
 const distributorPropDigest = '/r5npk2VVA46QFJnejgONBEh4BWtjrtu9x/IFeLksjWyGmB/cMWKSJWQl7aU3YRQRZ3AesG8gF7qGyvKX9Snig==';
 
-const wrap = (text: string) => text.replace(/(.{76})/g, '$1\n');
+function wrap(text: string) {
+    return text.replace(/(.{76})/g, '$1\n');
+}
 
-const createReference = (data: string | Buffer, uri: string) => {
+function createReference(data: string | Buffer, uri: string) {
     const digest = uri === '#prop' ? data : createHash('sha512').update(data).digest('base64');
 
     const transform = '<Transforms>\n' +
@@ -23,17 +25,21 @@ const createReference = (data: string | Buffer, uri: string) => {
         '<DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha512"></DigestMethod>\n' +
         `<DigestValue>${wrap(digest)}</DigestValue>\n` +
         '</Reference>\n';
-};
+}
 
 // Exclusive c14n reduced to one substitution; test/signature.js compares the result against the real thing.
-const canonicalise = (signedInfo: string) => signedInfo
+function canonicalise(signedInfo: string) {
+    return signedInfo
     .replace('<SignedInfo>', '<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">')
     .replace(/\n$/, '');
+}
 
-const bodyOf = (pem: string) => wrap(String(pem)
+function bodyOf(pem: string) {
+    return wrap(String(pem)
     .replace(/-----BEGIN CERTIFICATE-----/g, '')
     .replace(/-----END CERTIFICATE-----/g, '')
     .replace(/[\r\n]+/g, ''));
+}
 
 class Signature {
     private id: string;

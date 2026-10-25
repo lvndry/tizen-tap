@@ -7,7 +7,7 @@ const MAX_OUTPUT = 16 * 1024;
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
-const trailingExpression = (source) => {
+function trailingExpression(source) {
     const body = source.trim().replace(/;$/, '');
     const at = Math.max(body.lastIndexOf(';'), body.lastIndexOf('\n'));
 
@@ -24,10 +24,10 @@ const trailingExpression = (source) => {
     }
 
     return `${body.slice(0, at + 1)} return (${tail});`;
-};
+}
 
 // `new Function` rather than `vm`: the point is to reach into this process, and lwnode has no vm module.
-const compile = (source, names) => {
+function compile(source, names) {
     const candidates = [`return (${source});`, trailingExpression(source), source].filter(Boolean);
 
     let last;
@@ -41,20 +41,22 @@ const compile = (source, names) => {
     }
 
     throw last;
-};
+}
 
-const truncate = (text) => (text.length > MAX_OUTPUT
+function truncate(text) {
+    return (text.length > MAX_OUTPUT
     ? `${text.slice(0, MAX_OUTPUT)}\n… ${text.length - MAX_OUTPUT} more characters`
     : text);
+}
 
-const createRepl = (context) => {
+function createRepl(context) {
     const scope = { ...context };
     scope.$ = scope;
 
     const names = Object.keys(scope);
     const values = names.map((name) => scope[name]);
 
-    const evaluate = async (source) => {
+    async function evaluate(source) {
         if (typeof source !== 'string' || !source.trim()) {
             return { ok: false, error: 'Nothing to evaluate.' };
         }
@@ -77,9 +79,9 @@ const createRepl = (context) => {
         } catch (error) {
             return { ok: false, error: truncate((error && error.stack) || String(error)) };
         }
-    };
+    }
 
-    const openInspector = (port) => {
+    function openInspector(port) {
         let inspector;
 
         try {
@@ -98,9 +100,9 @@ const createRepl = (context) => {
         } catch (error) {
             return { ok: false, error: `Could not open the inspector: ${error.message}` };
         }
-    };
+    }
 
     return { evaluate, openInspector, names };
-};
+}
 
 module.exports = { createRepl, MAX_OUTPUT, DEPTH };

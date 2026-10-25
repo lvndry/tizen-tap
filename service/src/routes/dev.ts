@@ -18,20 +18,24 @@ const SHELL_OUTPUT_LIMIT = 12000;
 const SDB_TIMEOUT_MS = 30000;
 const DEFAULT_INSPECT_PORT = 9229;
 
-const preview = (source) => source.replace(/\s+/g, ' ').slice(0, 200);
+function preview(source) {
+    return source.replace(/\s+/g, ' ').slice(0, 200);
+}
 
-const register = (ctx, router) => {
+function register(ctx, router) {
     const { svc, sdb, repl } = ctx;
 
-    const gate = (request, response) => {
+    function gate(request, response) {
         const verdict = ctx.authorise(request.headers['x-homebrew-pin']);
         if (verdict.ok) return true;
 
         failure(response, verdict.code === ErrorCode.LOCKED_OUT ? 429 : 403, verdict.code, verdict.message);
         return false;
-    };
+    }
 
-    const readSource = async (request) => (await readBody(request, MAX_SOURCE)).toString('utf8');
+    async function readSource(request) {
+    return (await readBody(request, MAX_SOURCE)).toString('utf8');
+}
 
     router.on.post('/dev/eval', async (request, response) => {
         if (!gate(request, response)) return;
@@ -97,6 +101,6 @@ const register = (ctx, router) => {
         svc.warn(`inspector: ${opened.ok ? `open at ${opened.url}` : opened.error}`);
         json(response, opened);
     });
-};
+}
 
 module.exports = { register };

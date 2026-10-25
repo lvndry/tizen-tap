@@ -6,11 +6,11 @@ const RETRY_CEILING = 3000;
 // also how it waits for a service that has not finished starting. There is no platform event for
 // "the port is open now", but a refused connection is itself an event, so the only interval is the
 // pause between attempts, which grows to a few seconds and stops the moment one is accepted.
-const connect = ({ url = null, onMessage, onStatus }: {
+function connect({ url = null, onMessage, onStatus }: {
     url: string | null;
     onMessage: (type: string, payload: any) => void;
     onStatus: (status: string, attempt?: number) => void;
-}) => {
+}) {
     const address = url || (import.meta.env.DEV
         ? `ws://${location.host}/socket`
         : `ws://${location.host}`);
@@ -18,7 +18,7 @@ const connect = ({ url = null, onMessage, onStatus }: {
     let socket: WebSocket | null = null;
     let attempts = 0;
 
-    const open = () => {
+    function open() {
         attempts += 1;
         socket = new WebSocket(address);
 
@@ -45,22 +45,23 @@ const connect = ({ url = null, onMessage, onStatus }: {
         };
 
         socket.onerror = () => {};
-    };
+    }
 
     open();
 
-    const send = (type, payload = {}) => {
+    function send(type, payload = {}) {
         if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ type, payload }));
         }
-    };
+    }
 
     return { send };
-};
+}
 
 // XHR rather than fetch, only because it reports upload progress. The bar stops short of full
 // until the reply lands, since the TV then stages and installs without reporting anything.
-const upload = ({ file, pin, onProgress }) => new Promise((resolve, reject) => {
+function upload({ file, pin, onProgress }) {
+    return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
 
     request.open('POST', '/install', true);
@@ -93,5 +94,6 @@ const upload = ({ file, pin, onProgress }) => new Promise((resolve, reject) => {
 
     request.send(file);
 });
+}
 
 export { connect, upload };

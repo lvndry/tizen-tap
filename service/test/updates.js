@@ -45,8 +45,8 @@ const check = (name, ok, detail) => {
 }
 
 const CATALOG = [
-    { id: 'homebrew', name: 'Tizen Homebrew', version: null, packageId: 'GJBBYNLkgP',
-        source: { type: 'github', ref: 'SushyDev/tizen-homebrew' } },
+    { id: 'homebrew', name: 'Tizen Tap', version: null, packageId: 'GJBBYNLkgP',
+        source: { type: 'github', ref: 'lvndry/tizen-tap' } },
     { id: 'tube', name: 'YouTube', version: null, packageId: 'tUb3Xq7Lm9',
         source: { type: 'github', ref: 'SushyDev/tizen-youtube' } },
     { id: 'jellyfin', name: 'Jellyfin', version: null, packageId: 'AprZAcqzcc',
@@ -56,7 +56,7 @@ const CATALOG = [
 ];
 
 const INSTALLED = [
-    { id: 'GJBBYNLkgP', name: 'Tizen Homebrew', version: '0.1.0' },
+    { id: 'GJBBYNLkgP', name: 'Tizen Tap', version: '0.1.0' },
     { id: 'tUb3Xq7Lm9', name: 'YouTube', version: '0.1.0' },
     { id: 'org.xbmc.kodi', name: 'Kodi', version: '20.2' }
 ];
@@ -113,7 +113,7 @@ const of = (list, id) => (list || []).filter((entry) => entry.id === id)[0];
 
 const run = async () => {
     {
-        const github = fakeGitHub({ 'SushyDev/tizen-homebrew': 'v0.2.0' });
+        const github = fakeGitHub({ 'lvndry/tizen-tap': 'v0.2.0' });
         const updates = createUpdates({ packages: fakePackages(INSTALLED), latestRelease: github.latestRelease });
 
         const list = await updates.mark(CATALOG);
@@ -136,13 +136,13 @@ const run = async () => {
     }
 
     {
-        const github = fakeGitHub({ 'SushyDev/tizen-homebrew': 'v0.2.0', 'SushyDev/tizen-youtube': 'v0.1.0' });
+        const github = fakeGitHub({ 'lvndry/tizen-tap': 'v0.2.0', 'SushyDev/tizen-youtube': 'v0.1.0' });
         const updates = createUpdates({ packages: fakePackages(INSTALLED), latestRelease: github.latestRelease });
 
         const list = await updates.check(CATALOG, { id: 'homebrew' });
 
         check('checking one app asks about exactly that one',
-            github.asked.length === 1 && github.asked[0] === 'SushyDev/tizen-homebrew',
+            github.asked.length === 1 && github.asked[0] === 'lvndry/tizen-tap',
             github.asked.join(', '));
 
         const self = of(list, 'homebrew');
@@ -164,7 +164,7 @@ const run = async () => {
     }
 
     {
-        const github = fakeGitHub({ 'SushyDev/tizen-homebrew': 'v0.2.0', 'SushyDev/tizen-youtube': 'v0.1.0' });
+        const github = fakeGitHub({ 'lvndry/tizen-tap': 'v0.2.0', 'SushyDev/tizen-youtube': 'v0.1.0' });
         const updates = createUpdates({ packages: fakePackages(INSTALLED), latestRelease: github.latestRelease });
 
         const list = await updates.check(CATALOG);
@@ -195,7 +195,7 @@ const run = async () => {
     }
 
     {
-        const github = fakeGitHub({ 'SushyDev/tizen-homebrew': 'v0.1.0' });
+        const github = fakeGitHub({ 'lvndry/tizen-tap': 'v0.1.0' });
         const updates = createUpdates({
             packages: fakePackages([{ id: 'GJBBYNLkgP', version: '0.3.0' }]),
             latestRelease: github.latestRelease
@@ -308,7 +308,7 @@ const run = async () => {
     }
 
     {
-        const github = fakeGitHub({ 'SushyDev/tizen-homebrew': 'v9.0.0' });
+        const github = fakeGitHub({ 'lvndry/tizen-tap': 'v9.0.0' });
         const updates = createUpdates({ packages: fakePackages(null), latestRelease: github.latestRelease });
 
         const list = await updates.mark(CATALOG);

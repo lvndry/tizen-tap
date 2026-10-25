@@ -1,16 +1,16 @@
-# One command from a bare machine to Tizen Homebrew on the television:
+# One command from a bare machine to Tizen Tap on the television:
 #
-#   irm https://sushydev.github.io/tizen-homebrew/install.ps1 | iex
+#   irm https://lvndry.github.io/tizen-tap/install.ps1 | iex
 #
 # It downloads the installer and runs it. The installer carries its own runtime, so nothing has to
 # be installed first and nothing is left behind.
 
 $ErrorActionPreference = 'Stop'
 
-$repo = 'SushyDev/tizen-homebrew'
+$repo = 'lvndry/tizen-tap'
 
 # Only an x64 build is published; Windows on ARM runs it under emulation.
-$asset = 'tizen-homebrew-installer-windows-x64.exe'
+$asset = 'tizen-tap-installer-windows-x64.exe'
 $url = "https://github.com/$repo/releases/latest/download/$asset"
 
 $directory = Join-Path ([System.IO.Path]::GetTempPath()) ("tizen-homebrew-" + [System.Guid]::NewGuid().ToString('N'))

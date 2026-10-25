@@ -4,14 +4,14 @@ const { json, failure } = require('./respond.ts');
 const { size, took, host } = require('../obs/units.ts');
 
 // Sixty lines in place of express, which was 484KB. Routes match in order; `/*` matches a prefix.
-const createRouter = (options) => {
+function createRouter(options) {
     const settings = options || {};
     const log = settings.log || null;
     const quiet = settings.quiet || (() => false);
 
     const routes: { matches: (requestMethod: string, requestPath: string) => boolean; handle: (request: any, response: any, extra: { path: string, query: URLSearchParams }) => any }[] = [];
 
-    const add = (method, path, handle) => {
+    function add(method, path, handle) {
         const isPrefix = path.endsWith('/*');
         const prefix = isPrefix ? path.slice(0, -1) : null;
 
@@ -21,7 +21,7 @@ const createRouter = (options) => {
         };
 
         routes.push({ matches, handle });
-    };
+    }
 
     const on = {
         get: (path, handle) => add('GET', path, handle),
@@ -29,7 +29,7 @@ const createRouter = (options) => {
         delete: (path, handle) => add('DELETE', path, handle)
     };
 
-    const listener = (request, response) => {
+    function listener(request, response) {
         const startedAt = Date.now();
 
         if (log) {
@@ -72,9 +72,9 @@ const createRouter = (options) => {
                     failure(response, 500, error && error.code ? error.code : 'internal', String(error && error.message || error));
                 }
             });
-    };
+    }
 
     return { on, listener, json, failure };
-};
+}
 
 module.exports = { createRouter };

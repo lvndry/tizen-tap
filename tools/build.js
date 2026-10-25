@@ -80,7 +80,7 @@ function main() {
 
     const started = Date.now();
 
-    ui.group('Tizen Homebrew');
+    ui.group('Tizen Tap');
     STEPS.forEach((step) => {
         const result = runStep(step);
         ui.ok(step.label, result.detail, result.ms);

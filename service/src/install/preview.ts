@@ -23,9 +23,11 @@ const MIME = {
     webp: 'image/webp'
 };
 
-const mimeOf = (path: string) => MIME[String(path).split('.').pop()!.toLowerCase()] || null;
+function mimeOf(path: string) {
+    return MIME[String(path).split('.').pop()!.toLowerCase()] || null;
+}
 
-const iconOf = (archive, identity) => {
+function iconOf(archive, identity) {
     const named = identity && identity.iconPath;
 
     // A native package names the icon under shared/res; a widget's src is relative to the zip root.
@@ -52,9 +54,9 @@ const iconOf = (archive, identity) => {
     }
 
     return null;
-};
+}
 
-const describe = (archive, identity = null) => {
+function describe(archive, identity = null) {
     const known = identity || (() => {
         try {
             return manifest.identify(archive);
@@ -73,9 +75,9 @@ const describe = (archive, identity = null) => {
         isWgt: known.isWgt,
         icon: iconOf(archive, known)
     };
-};
+}
 
-const describeFile = (path) => {
+function describeFile(path) {
     const handle = (() => {
         try {
             return openSync(path, 'r');
@@ -96,6 +98,6 @@ const describeFile = (path) => {
     } finally {
         closeSync(handle);
     }
-};
+}
 
 module.exports = { describe, describeFile, iconOf, HEAD, MAX_ICON };

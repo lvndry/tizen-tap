@@ -23,7 +23,7 @@ const widgetVersion = /<widget\b[^>]*\bversion="([^"]*)"/
 
     check('a package is read down to its name, version and id',
         described &&
-        described.name === 'Tizen Homebrew' &&
+        described.name === 'Tizen Tap' &&
         described.version === widgetVersion &&
         described.packageId === 'GJBBYNLkgP' &&
         described.appId === 'GJBBYNLkgP.TizenHomebrew',
@@ -82,7 +82,7 @@ const widgetVersion = /<widget\b[^>]*\bversion="([^"]*)"/
     const described = preview.describeFile(path);
 
     check('a package on a stick is read off disk without loading all of it',
-        described && described.name === 'Tizen Homebrew' && described.icon !== null,
+        described && described.name === 'Tizen Tap' && described.icon !== null,
         JSON.stringify(described && { ...described, icon: 'present' }));
 
     check('and a path with nothing at it is null rather than a throw',

@@ -3,7 +3,7 @@
 const { inflateRawSync } = require('zlib');
 
 // Read without unzipping and without an XML parser: xml2js cost 99KB to extract two attributes.
-const readFromZip = (archive, wanted) => {
+function readFromZip(archive, wanted) {
     const LOCAL_HEADER = 0x04034b50;
 
     let cursor = 0;
@@ -30,15 +30,15 @@ const readFromZip = (archive, wanted) => {
     }
 
     return null;
-};
+}
 
-const identify = (archive) => {
-    const attribute = (xml, tag, key) => {
+function identify(archive) {
+    function attribute(xml, tag, key) {
         const element = new RegExp(`<${tag}\\b[^>]*>`).exec(xml);
         if (!element) return null;
         const found = new RegExp(`\\b${key}="([^"]*)"`).exec(element[0]);
         return found ? found[1] : null;
-    };
+    }
 
     const widget = readFromZip(archive, 'config.xml');
 
@@ -81,8 +81,10 @@ const identify = (archive) => {
     }
 
     throw badPackage('No config.xml or tizen-manifest.xml — this is not a Tizen package.');
-};
+}
 
-const badPackage = (message) => Object.assign(new Error(message), { code: 'badPackage' });
+function badPackage(message) {
+    return Object.assign(new Error(message), { code: 'badPackage' });
+}
 
 module.exports = { identify, readFromZip };

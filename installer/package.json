@@ -3,7 +3,7 @@
   "version": "0.1.8",
   "private": true,
   "type": "module",
-  "description": "Single-binary guided installer: finds the TV, mints a certificate, installs Tizen Homebrew.",
+  "description": "Single-binary guided installer: finds the TV, mints a certificate, installs Tizen Tap.",
   "license": "GPL-3.0-only",
   "scripts": {
     "start": "bun run src/main.ts",

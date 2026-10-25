@@ -22,7 +22,7 @@ const frame = async (draw: (app: ReturnType<typeof createApp>) => void) => {
 test("the first screen says what to change on the television", async () => {
     const shown = await frame((app) => { app.intro(); });
 
-    expect(shown).toContain("Tizen Homebrew");
+    expect(shown).toContain("Tizen Tap");
     expect(shown).toContain("Open Apps, then press 12345");
     expect(shown).toContain("Turn Developer mode on");
     expect(shown).toContain("Set Host PC IP to");

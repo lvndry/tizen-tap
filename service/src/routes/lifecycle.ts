@@ -13,10 +13,11 @@ const { json, failure } = require('../http/respond.ts');
 const { took, host } = require('../obs/units.ts');
 const { ErrorCode } = require('../protocol.ts');
 
-const register = (ctx, router) => {
+function register(ctx, router) {
     const { build, sdb, svc, recorded } = ctx;
 
-    const exitAfterResponse = (payload, asked, why, restart) => (request, response) => {
+    function exitAfterResponse(payload, asked, why, restart) {
+    return (request, response) => {
         const verdict = ctx.authorise(request.headers['x-homebrew-pin']);
 
         if (!verdict.ok) {
@@ -41,12 +42,13 @@ const register = (ctx, router) => {
             process.exit(0);
         }, 300);
     };
+}
 
     router.on.post('/restart', exitAfterResponse(
         { restarting: true }, 'restart', 'so auto-restart reloads it on new code', true));
 
     router.on.post('/shutdown', exitAfterResponse(
         { stopping: true }, 'stop', 'because someone asked it to', false));
-};
+}
 
 module.exports = { register };

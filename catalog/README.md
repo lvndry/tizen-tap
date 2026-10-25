@@ -3,7 +3,7 @@
 `catalog.json` is the list of apps the channel offers, published to GitHub
 Pages at:
 
-    https://sushydev.github.io/tizen-homebrew/catalog.json
+    https://lvndry.github.io/tizen-tap/catalog.json
 
 That URL is the default in `tizen.config.json`, so it is baked into every
 build. Adding an app is a commit to this directory — no rebuild, no reinstall,
@@ -75,7 +75,7 @@ and the release is the thing that actually moves. `version` is what stands for
 a `url` app, which has no releases page to ask and so is answered the moment
 the list arrives.
 
-Tizen Homebrew is in this list for that reason. It is how the channel reaches
+Tizen Tap is in this list for that reason. It is how the channel reaches
 its own next version — the app list on your phone is also the update button for
 the thing drawing it.
 

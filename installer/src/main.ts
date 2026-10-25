@@ -24,10 +24,10 @@ const at = process.argv.indexOf("--wgt");
 const renderer = await createCliRenderer({ exitOnCtrlC: true, clearOnShutdown: true, useKittyKeyboard: null });
 
 // A signal restores the terminal and exits even if the read loop itself is the thing that's wedged.
-const hardExit = () => {
+function hardExit() {
     renderer.destroy();
     process.exit(130);
-};
+}
 
 process.once("SIGINT", hardExit);
 process.once("SIGTERM", hardExit);

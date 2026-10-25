@@ -3,16 +3,16 @@
 const { size } = require('./units.ts');
 
 // Every source is optional: on Tizen 9 Smack denies the service its own /proc.
-const reading = (fn) => {
+function reading(fn) {
     try {
         const value = fn();
         return typeof value === 'number' && value >= 0 ? value : null;
     } catch (e) {
         return null;
     }
-};
+}
 
-const sample = (proc) => {
+function sample(proc) {
     const source = proc || process;
 
     const heap = (() => {
@@ -38,9 +38,9 @@ const sample = (proc) => {
         external: heap.external !== undefined ? heap.external : null,
         pss: lwnode && typeof lwnode.PssUsage === 'function' ? reading(() => lwnode.PssUsage()) : null
     };
-};
+}
 
-const level = (of) => {
+function level(of) {
     if (!of) return null;
     if (of.pss !== null && of.pss !== undefined) return of.pss;
     if (of.rss !== null && of.rss !== undefined) return of.rss;
@@ -48,9 +48,9 @@ const level = (of) => {
         return of.heap + (of.external || 0);
     }
     return null;
-};
+}
 
-const peak = (proc) => {
+function peak(proc) {
     let highest: any = null;
     let at = null;
 
@@ -67,9 +67,9 @@ const peak = (proc) => {
         },
         highest: () => (highest ? { ...highest, at } : { at: null })
     };
-};
+}
 
-const describe = (of) => {
+function describe(of) {
     if (!of) return 'unmeasurable';
 
     const parts: string[] = [];
@@ -80,6 +80,6 @@ const describe = (of) => {
     if (of.external !== null && of.external !== undefined) parts.push(`${size(of.external)} external`);
 
     return parts.length ? parts.join(' + ') : 'unmeasurable';
-};
+}
 
 module.exports = { sample, peak, describe, level };

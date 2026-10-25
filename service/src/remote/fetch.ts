@@ -9,16 +9,18 @@ const DEFAULT_TIMEOUT = 15000;
 const MAX_REDIRECTS = 5;
 
 // A hundred lines in place of node-fetch, which cost 308KB of the bundle. Node 12 has no global fetch.
-const request = (url, options: any = {}) => {
+function request(url, options: any = {}) {
     const { method = 'GET', headers = {}, body, timeout = DEFAULT_TIMEOUT, redirectsLeft = MAX_REDIRECTS } = options;
 
     return new Promise<{ status: number, headers: any, body: Buffer }>((resolve, reject) => {
         const target = new URL(url);
         const transport = target.protocol === 'https:' ? https : http;
 
-        const failWith = (message) => reject(Object.assign(new Error(message), { url }));
+        function failWith(message) {
+    return reject(Object.assign(new Error(message), { url }));
+}
 
-        const collect = (response) => {
+        function collect(response) {
             const isRedirect = response.statusCode >= 300 && response.statusCode < 400 && response.headers.location;
 
             if (isRedirect) {
@@ -38,7 +40,7 @@ const request = (url, options: any = {}) => {
                 body: Buffer.concat(chunks)
             }));
             response.on('error', (error) => failWith(`Response failed: ${error.message}`));
-        };
+        }
 
         const outgoing = transport.request(target, { method, headers, timeout }, collect);
 
@@ -52,9 +54,9 @@ const request = (url, options: any = {}) => {
         if (body) outgoing.write(body);
         outgoing.end();
     });
-};
+}
 
-const getJson = async (url, options = {}) => {
+async function getJson(url, options = {}) {
     const { status, body } = await request(url, options);
 
     if (status < 200 || status >= 300) {
@@ -66,9 +68,9 @@ const getJson = async (url, options = {}) => {
     } catch (e) {
         throw new Error(`${url} did not return JSON`);
     }
-};
+}
 
-const getBuffer = async (url, options = {}) => {
+async function getBuffer(url, options = {}) {
     const { status, body } = await request(url, options);
 
     if (status < 200 || status >= 300) {
@@ -76,6 +78,6 @@ const getBuffer = async (url, options = {}) => {
     }
 
     return body;
-};
+}
 
 module.exports = { request, getJson, getBuffer, MAX_REDIRECTS, DEFAULT_TIMEOUT };

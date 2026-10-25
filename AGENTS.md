@@ -8,7 +8,7 @@ GUI, no TV in reach required.
 
 ## Two control planes
 
-**The Homebrew service** — `http://<tv-ip>:8091`, the app's own brain. Every
+**The Tap service** — `http://<tv-ip>:8091`, the app's own brain. Every
 call except the health check wants the header `x-homebrew-pin: <6 digits>`
 (dev builds use `000000`). This is where an agent installs software and inspects
 state.
@@ -67,9 +67,10 @@ loopback — while that socket is open, `POST /dev/root/exec` is a root shell.
 It re-arms after every power cycle; if it is not connected, call
 `POST /dev/root/arm` (PIN-gated). See [docs/sdbd-and-root.md](docs/sdbd-and-root.md).
 
-A 403 means the PIN is wrong or rotated; `GET /pin` (from the TV itself) or the
-PIN relay is how you get the current one. Five wrong guesses lock pairing for
-five minutes — back off, do not hammer.
+A 403 means the PIN is wrong; `GET /pin` (from the TV itself) or the
+PIN relay is how you get the current one. It is minted once at first start
+and kept across restarts, so cache it. Five wrong guesses lock pairing
+for five minutes — back off, do not hammer.
 
 ## The toolbox (sibling repo, plain Node)
 
@@ -125,7 +126,7 @@ All of it honours `TV_IP` (default in the toolbox is the TV's address) and reads
 This repo also ships the TV's Stremio streaming server ([stremio/](stremio/)).
 Treat these as load-bearing, not guesses:
 
-- **The server listens on `11470`.** It is a separate app from Tizen Homebrew
+- **The server listens on `11470`.** It is a separate app from Tizen Tap
   and from the Stremio *client* (`newslO9NqF`). The client points at it by the
   TV's **LAN IP** (`<tv-ip>:11470`), never `127.0.0.1`.
 - **`127.0.0.1` is per-app on Tizen.** Every app is in its own network sandbox,

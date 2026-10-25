@@ -20,13 +20,15 @@ const DIRECTIONS = {
     [KEY.down]:  'down'
 };
 
-const candidates = (root) => Array.prototype.slice
+function candidates(root) {
+    return Array.prototype.slice
     .call(root.querySelectorAll('[data-focus]'))
     .filter((element) => !element.disabled && element.offsetParent !== null);
+}
 
 // Null when `to` is not in that direction. Otherwise distance along the axis pressed plus twice
 // the drift across it, so a target in line beats a nearer one off to the side.
-const score = (from, to, direction) => {
+function score(from, to, direction) {
     const horizontal = direction === 'left' || direction === 'right';
 
     const along = {
@@ -46,19 +48,23 @@ const score = (from, to, direction) => {
         : to.left + to.width / 2;
 
     return Math.max(along, 0) + Math.abs(toCentre - fromCentre) * 2;
-};
+}
 
 // `onBack` is not optional in practice: a TV app that does not handle Return traps the person inside it.
-const remote = ({ root = document, onBack = () => {}, onKey = (keyCode: number, event: KeyboardEvent): boolean => false } = {}) => {
+function remote({ root = document, onBack = () => {}, onKey = (keyCode: number, event: KeyboardEvent): boolean => false } = {}) {
     let name = null;
 
-    const elementFor = (wanted) => (wanted
+    function elementFor(wanted) {
+    return (wanted
         ? candidates(root).filter((element) => element.getAttribute('data-focus') === wanted)[0] || null
         : null);
+}
 
-    const current = () => elementFor(name);
+    function current() {
+    return elementFor(name);
+}
 
-    const light = (element) => {
+    function light(element) {
         candidates(root).forEach((other) => other.classList.remove('is-focus'));
 
         if (!element) {
@@ -70,11 +76,13 @@ const remote = ({ root = document, onBack = () => {}, onKey = (keyCode: number, 
         element.classList.add('is-focus');
 
         if (element.focus) element.focus({ preventScroll: true });
-    };
+    }
 
-    const focus = (wanted) => light(elementFor(wanted) || candidates(root)[0] || null);
+    function focus(wanted) {
+    return light(elementFor(wanted) || candidates(root)[0] || null);
+}
 
-    const move = (direction) => {
+    function move(direction) {
         const here = current();
         const all = candidates(root);
 
@@ -90,9 +98,9 @@ const remote = ({ root = document, onBack = () => {}, onKey = (keyCode: number, 
 
         // Nothing over there is the edge of the screen, not a failure, so focus stays where it is.
         if (best) light(best.element);
-    };
+    }
 
-    const onKeydown = (event) => {
+    function onKeydown(event) {
         if (onKey(event.keyCode, event)) {
             event.preventDefault();
             return;
@@ -119,16 +127,16 @@ const remote = ({ root = document, onBack = () => {}, onKey = (keyCode: number, 
                 here.click();
             }
         }
-    };
+    }
 
     // `.is-focus` and the browser's own focus are two cursors for one idea, and tv.css lights a
     // control for either — so rather than forbid a click or a Tab, whatever ends up focused becomes
     // the cursor and there is only ever one lit control.
-    const onFocusIn = (event) => {
+    function onFocusIn(event) {
         const control = event.target.closest && event.target.closest('[data-focus]');
         if (!control || control === current()) return;
         light(control);
-    };
+    }
 
     document.addEventListener('keydown', onKeydown);
     document.addEventListener('focusin', onFocusIn);
@@ -156,6 +164,6 @@ const remote = ({ root = document, onBack = () => {}, onKey = (keyCode: number, 
             document.removeEventListener('focusin', onFocusIn);
         }
     };
-};
+}
 
 export { remote, KEY };

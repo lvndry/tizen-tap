@@ -112,8 +112,9 @@ npm run full-bootstrap          # or: -- <tv-ip>, if you know it
 | **USB** | A stick plugged into the TV |
 | **Shell** | sdb commands, off by default |
 
-The PIN changes every time the app opens, and the TV screen shows the current
-one. Your phone keeps the last one that worked until the TV restarts.
+The PIN is minted once, on the first start, and then kept: reboots and
+service restarts do not change it, so paired phones stay paired. The TV
+screen always shows the current one, and `GET /pin` (loopback only) does too.
 
 **Updates.** Every **Apps** row says whether it is installed and at which
 version; **check** asks GitHub whether anything newer was released. tizen-tap

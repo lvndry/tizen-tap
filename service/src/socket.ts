@@ -19,8 +19,8 @@ const CLOSED_BECAUSE = {
     1012: 'the service is restarting'
 };
 
-const attach = ({ server, store, authorise, installer, catalog, updates, relay, refreshDevice,
-    fromLoopback, greeting, recorded, config, protocol, log }) => {
+function attach({ server, store, authorise, installer, catalog, updates, relay, refreshDevice,
+    fromLoopback, greeting, recorded, config, protocol, log }) {
     const { Inbound, Outbound, ErrorCode, ProtocolError } = protocol;
 
     const say = log ? log.on('sock') : null;
@@ -60,14 +60,16 @@ const attach = ({ server, store, authorise, installer, catalog, updates, relay, 
                 `(${connected} ${connected === 1 ? 'client' : 'clients'})`);
         });
 
-        const send = (type, payload) => {
+        function send(type, payload) {
             if (socket.readyState === WebSocket.OPEN) socket.send(protocol.encode(type, payload));
-        };
+        }
 
         // Named so `close` can take it back out of `watchers`; `send` itself is fine to hold on to.
-        const push = (type, payload) => send(type, payload);
+        function push(type, payload) {
+    return send(type, payload);
+}
 
-        const sendFailure = (error) => {
+        function sendFailure(error) {
             // A coded error is a refusal this service meant to make; only a surprise gets a trace.
             const expected = Boolean(error && error.code);
 
@@ -85,17 +87,17 @@ const attach = ({ server, store, authorise, installer, catalog, updates, relay, 
                 remedy: (error && error.remedy) || null,
                 fatal: false
             });
-        };
+        }
 
-        const sendDeviceState = async () => {
+        async function sendDeviceState() {
             const state = await refreshDevice();
             send(Outbound.STATE, { ...state, hasCertificates: config.hasCertificates() });
-        };
+        }
 
         // The tail first, from the sequence number the caller already has, then every line as it is
         // written. A reconnect resumes rather than repeating, and a service that restarted answers
         // with a lower uptime, which is how the page knows to start its log again.
-        const startWatching = ({ logsSince }) => {
+        function startWatching({ logsSince }) {
             if (unwatch) unwatch();
 
             send(Outbound.LOG, { lines: recorded.since(logsSince), uptime: recorded.uptime() });
@@ -105,9 +107,9 @@ const attach = ({ server, store, authorise, installer, catalog, updates, relay, 
             if (watchers.indexOf(push) === -1) watchers.push(push);
 
             return sendDeviceState();
-        };
+        }
 
-        const greet = async ({ pin }) => {
+        async function greet({ pin }) {
             const verdict = authorise(pin);
 
             if (!verdict.ok) {
@@ -123,18 +125,18 @@ const attach = ({ server, store, authorise, installer, catalog, updates, relay, 
             send(Outbound.RELAY_STATE, { enabled: relay.enabled });
 
             await sendDeviceState();
-        };
+        }
 
-        const listCatalog = async ({ refresh }) => {
+        async function listCatalog({ refresh }) {
             const result = await catalog.fetch({ refresh: !!refresh });
 
             store.update({ catalog: result.entries, catalogStale: result.stale });
 
             // Marked from the kept listing rather than by asking the set, so the list draws now.
             send(Outbound.CATALOG, { ...result, entries: await updates.mark(result.entries) });
-        };
+        }
 
-        const checkUpdates = async ({ id }) => {
+        async function checkUpdates({ id }) {
             const entries = store.select('catalog') || [];
 
             send(Outbound.CATALOG, {
@@ -142,11 +144,13 @@ const attach = ({ server, store, authorise, installer, catalog, updates, relay, 
                 stale: Boolean(store.select('catalogStale')),
                 source: 'cache'
             });
-        };
+        }
 
-        const describe = ({ source, ref }) => `${source} ${ref}`;
+        function describe({ source, ref }) {
+    return `${source} ${ref}`;
+}
 
-        const runInstall = async ({ source, ref }) => {
+        async function runInstall({ source, ref }) {
             if (say) say.info(`${client} asked to install ${describe({ source, ref })}`);
 
             try {
@@ -169,9 +173,9 @@ const attach = ({ server, store, authorise, installer, catalog, updates, relay, 
                 }
                 sendFailure(error);
             }
-        };
+        }
 
-        const listDirectory = ({ path }) => {
+        function listDirectory({ path }) {
             const root = path || '/media';
 
             const readable = (() => {
@@ -208,9 +212,9 @@ const attach = ({ server, store, authorise, installer, catalog, updates, relay, 
             }, [{ name: '..', path: root === '/media' ? '/media' : join(root, '..'), isDirectory: true }]);
 
             send(Outbound.DIR, entries);
-        };
+        }
 
-        const setRelay = ({ enabled, persist }) => {
+        function setRelay({ enabled, persist }) {
             if (say) say.warn(`${client} turned the command relay ${enabled ? 'on' : 'off'}${persist ? ', and stored that' : ''}`);
 
             relay.setEnabled(enabled);
@@ -219,9 +223,9 @@ const attach = ({ server, store, authorise, installer, catalog, updates, relay, 
             if (persist) config.update({ relayEnabled: relay.enabled });
 
             send(Outbound.RELAY_STATE, { enabled: relay.enabled });
-        };
+        }
 
-        const runRelayCommand = async ({ id, command, timeout }) => {
+        async function runRelayCommand({ id, command, timeout }) {
             try {
                 const result = await relay.exec(id, command, {
                     timeout,
@@ -237,19 +241,21 @@ const attach = ({ server, store, authorise, installer, catalog, updates, relay, 
             } catch (error) {
                 sendFailure(error);
             }
-        };
+        }
 
         // Minting needs a Samsung account, so the pair is made on a computer and sent here.
-        const createCertificates = () => sendFailure(ProtocolError(
+        function createCertificates() {
+    return sendFailure(ProtocolError(
             ErrorCode.RESIGN_FAILED,
             'Certificates are minted on a computer and sent to this TV with `npm run certs`. ' +
             'Signing into a Samsung account from here is not supported.'
         ));
+}
 
-        const forgetCertificates = async () => {
+        async function forgetCertificates() {
             config.forgetCertificates();
             await sendDeviceState();
-        };
+        }
 
         const handlers = {
             [Inbound.HELLO]: greet,
@@ -304,9 +310,11 @@ const attach = ({ server, store, authorise, installer, catalog, updates, relay, 
 
     // Anything the service learns on its own rather than on being asked: the device state sweep is
     // the only caller today.
-    const broadcast = (type, payload) => watchers.slice().forEach((to) => to(type, payload));
+    function broadcast(type, payload) {
+    return watchers.slice().forEach((to) => to(type, payload));
+}
 
     return { wsServer, broadcast };
-};
+}
 
 module.exports = { attach };

@@ -2,7 +2,7 @@
 <widget xmlns:tizen="http://tizen.org/ns/widgets" xmlns="http://www.w3.org/ns/widgets" id="https://stremioserver.local" version="1.0.0" viewmodes="maximized">
     <access origin="*" subdomains="true"></access>
     <tizen:application id="S6K2WQ8MnP.StremioServer" package="S6K2WQ8MnP" required_version="3.0"/>
-    <author>Tizen Homebrew</author>
+    <author>Tizen Tap</author>
     <content src="index.html"/>
     <feature name="http://tizen.org/feature/screen.size.all"/>
     <feature name="http://tizen.org/feature/web.service"/>

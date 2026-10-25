@@ -6,7 +6,7 @@
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lvndry/tizen-homebrew.git"
+    "url": "git+https://github.com/lvndry/tizen-tap.git"
   },
   "engines": {
     "node": ">=20"
@@ -47,8 +47,5 @@
     "tizen": "https://github.com/reisxd/tizen.js/tarball/main",
     "typescript": "^7.0.2",
     "ws": "^8.21.3"
-  },
-  "dependencies": {
-    "@opentui/core": "^0.6.8"
   }
 }

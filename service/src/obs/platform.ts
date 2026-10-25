@@ -12,7 +12,7 @@ const IRREGULAR = {
     'libtizen_tvaudio.so': 'tizen.tvaudiocontrol'
 };
 
-const namespaceOf = (file) => {
+function namespaceOf(file) {
     if (IRREGULAR[file]) return IRREGULAR[file];
 
     const tizenApi = /^libtizen_(.+)\.so$/.exec(file);
@@ -22,30 +22,32 @@ const namespaceOf = (file) => {
     if (samsungApi) return `webapis.${samsungApi[1]}`;
 
     return null;
-};
+}
 
-const exists = (path) => stat(path).then(() => true, () => false);
+function exists(path) {
+    return stat(path).then(() => true, () => false);
+}
 
-const identity = (globals) => {
-    const read = (name) => {
+function identity(globals) {
+    function read(name) {
         try {
             const info = globals.webapis && globals.webapis.productinfo;
             return info && typeof info[name] === 'function' ? info[name]() || null : null;
         } catch (e) {
             return null;
         }
-    };
+    }
 
     return { model: read('getRealModel'), firmware: read('getFirmware') };
-};
+}
 
-const deviceApis = async (globals, directory) => {
+async function deviceApis(globals, directory) {
     const names = await readdir(directory).then(
         (files) => files.map(namespaceOf).filter(Boolean).sort(),
         () => null
     );
 
-    const keysOf = (name) => {
+    function keysOf(name) {
         try {
             const host = globals[name];
             // Object.keys, never a property read: reading one dlopens a shared library.
@@ -53,16 +55,16 @@ const deviceApis = async (globals, directory) => {
         } catch (e) {
             return [];
         }
-    };
+    }
 
     return {
         directory,
         available: names,
         bound: { tizen: keysOf('tizen'), webapis: keysOf('webapis') }
     };
-};
+}
 
-const describe = async (options) => {
+async function describe(options) {
     const opts = options || {};
     const proc = opts.proc || process;
     const globals = opts.globals || (typeof globalThis !== 'undefined' ? globalThis : global);
@@ -98,11 +100,13 @@ const describe = async (options) => {
     ]);
 
     return { lwnode, intl, v8Module, lwnodeBinary: binary, deviceApis: apis, identity: identity(globals) };
-};
+}
 
-const callable = (keys) => keys.filter((key) => key[0] === key[0].toLowerCase());
+function callable(keys) {
+    return keys.filter((key) => key[0] === key[0].toLowerCase());
+}
 
-const summary = (facts) => {
+function summary(facts) {
     const lines: string[] = [];
 
     if (facts.identity.model) {
@@ -137,6 +141,6 @@ const summary = (facts) => {
     });
 
     return lines;
-};
+}
 
 module.exports = { describe, summary, namespaceOf, EXTENSIONS_DIR, LWNODE_BINARY };

@@ -1,12 +1,14 @@
 // The same shape as the service's store: one value, replaced rather than mutated, with everything
 // else a pure function of it.
-const createStore = <T extends object>(initial: T) => {
+function createStore<T extends object>(initial: T) {
     let current = Object.freeze({ ...initial });
     const listeners = new Set<(state: T) => void>();
 
-    const get = () => current;
+    function get() {
+    return current;
+}
 
-    const update = (patch) => {
+    function update(patch) {
         const changes = typeof patch === 'function' ? patch(current) : patch;
         const next = Object.freeze({ ...current, ...changes });
 
@@ -15,14 +17,14 @@ const createStore = <T extends object>(initial: T) => {
         current = next;
         listeners.forEach((listener) => listener(current));
         return current;
-    };
+    }
 
-    const subscribe = (listener) => {
+    function subscribe(listener) {
         listeners.add(listener);
         return () => listeners.delete(listener);
-    };
+    }
 
     return { get, update, subscribe };
-};
+}
 
 export { createStore };

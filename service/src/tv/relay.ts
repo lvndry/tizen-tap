@@ -58,7 +58,7 @@ Relay.prototype.exec = function (id, command, options) {
     if (!this.enabled) {
         return Promise.reject(ProtocolError(
             ErrorCode.RELAY_DISABLED,
-            'The command relay is turned off. Enable it from the Tizen Homebrew UI first.'
+            'The command relay is turned off. Enable it from the Tizen Tap UI first.'
         ));
     }
 
@@ -78,7 +78,7 @@ Relay.prototype.exec = function (id, command, options) {
     if (isSelfDestructive(trimmed, this.packageId)) {
         return Promise.reject(ProtocolError(
             ErrorCode.BAD_MESSAGE,
-            'Refused: that command would disable the relay or remove Tizen Homebrew, leaving no way back in without a computer.'
+            'Refused: that command would disable the relay or remove Tizen Tap, leaving no way back in without a computer.'
         ));
     }
 

@@ -37,19 +37,24 @@ const MAX_LINES = 1000;
 
 let clockOffset: number | null = null;
 
-const stamp = () => (clockOffset === null
+function stamp() {
+    return (clockOffset === null
     ? { t: Date.now() - started, estimated: true }
     : { t: Date.now() - started + clockOffset, estimated: false });
+}
 
-const restamp = (lines) => lines.map((line) => (line.estimated
+function restamp(lines) {
+    return lines.map((line) => (line.estimated
     ? { ...line, t: line.t + clockOffset, estimated: false }
     : line));
+}
 
 let arrivals = 0;
 
 // Both the service and this page write here, so lines are sorted by time with arrival order as a stable
 // tie-break.
-const append = (incoming, restamped = false) => store.update((state) => {
+function append(incoming, restamped = false) {
+    return store.update((state) => {
     if (incoming.length === 0 && !restamped) return {};
 
     const numbered = incoming.map((entry) => ({ ...entry, n: ++arrivals }));
@@ -70,8 +75,11 @@ const append = (incoming, restamped = false) => store.update((state) => {
         from: Math.max(0, following ? kept.length - rows : state.from - dropped)
     };
 });
+}
 
-const say = (text, level = 'info') => append([{ ...stamp(), facility: 'ui', level, text }]);
+function say(text, level = 'info') {
+    return append([{ ...stamp(), facility: 'ui', level, text }]);
+}
 
 window.onerror = (message, _source, line) => say(`page error: ${message} (line ${line})`, 'err');
 
@@ -84,7 +92,8 @@ const channel = theme({
 // The one thing left on HTTP: a single shot with no answer worth waiting for. Everything this page
 // used to ask for repeatedly now arrives over the socket instead. The PIN comes from the service's
 // own greeting, which it gives to loopback callers.
-const post = (path) => new Promise((resolve, reject) => {
+function post(path) {
+    return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open('POST', BASE + path, true);
     request.timeout = 4000;
@@ -100,6 +109,7 @@ const post = (path) => new Promise((resolve, reject) => {
     request.ontimeout = () => reject(new Error('timeout'));
     request.send();
 });
+}
 
 // The launch-param page leaves itself: the greeting proves the service is up, the timer gives the
 // socket a second to deliver it before the page goes. A backgrounding failure is not worth holding
@@ -115,7 +125,7 @@ const post = (path) => new Promise((resolve, reject) => {
 let hasSelfHid = false;
 let touched = false;
 
-const selfHide = () => {
+function selfHide() {
     if (hasSelfHid) return;
     hasSelfHid = true;
 
@@ -130,11 +140,12 @@ const selfHide = () => {
             say(`backgrounding failed: ${e.message || e}`, 'warn');
         }
     }, 4000);
-};
+}
 
 const SERVICE_ID = application ? `${application.appInfo.packageId}.TizenHomebrewService` : null;
 
-const launchService = () => new Promise((resolve, reject) => {
+function launchService() {
+    return new Promise((resolve, reject) => {
     tizen.application.launchAppControl(
         new tizen.ApplicationControl('http://tizen.org/appcontrol/operation/service'),
         SERVICE_ID,
@@ -142,6 +153,7 @@ const launchService = () => new Promise((resolve, reject) => {
         reject
     );
 });
+}
 
 let leaving = false;
 
@@ -150,7 +162,7 @@ let leaving = false;
 // which is the whole point of config.xml's on-boot. The audio is torn down here rather than left to
 // the page going away, because a runtime that keeps the page alive keeps the theme playing over the
 // Tizen home screen.
-const leave = () => {
+function leave() {
     if (leaving) return;
 
     if (!application) {
@@ -162,23 +174,26 @@ const leave = () => {
 
     channel.stop();
     application.exit();
-};
+}
 
-const open = (view) => store.update((state) => {
+function open(view) {
+    return store.update((state) => {
     const { rows, total } = windowOf({ ...state, view });
 
     return { view, rows: null, from: view === 'logs' ? Math.max(0, total - rows) : 0 };
 });
+}
 
-const close = () => {
+function close() {
     const { view } = store.get();
 
     store.update({ view: 'main', from: 0, rows: null });
 
     keys.focus(view === 'credits' ? 'credits' : 'logs');
-};
+}
 
-const scroll = (steps, page) => store.update((state) => {
+function scroll(steps, page) {
+    return store.update((state) => {
     const { rows, total } = windowOf(state);
     if (!rows) return {};
 
@@ -187,12 +202,15 @@ const scroll = (steps, page) => store.update((state) => {
 
     return { from: Math.max(0, Math.min(ceiling, next)) };
 });
+}
 
-const toEnd = () => store.update((state) => {
+function toEnd() {
+    return store.update((state) => {
     const { rows, total } = windowOf(state);
 
     return rows ? { from: Math.max(0, total - rows) } : {};
 });
+}
 
 const actions = {
     theme: () => channel.toggle(),
@@ -249,7 +267,7 @@ mount(store, { masthead, connect, status, log, overlay, deck });
 let offered: number[] = [];
 let settling = false;
 
-const fit = () => {
+function fit() {
     const pane = document.querySelector('.curtain .feed, .curtain .roll');
     if (!pane) return;
 
@@ -266,7 +284,7 @@ const fit = () => {
 
     if (rows === 0 || rows === store.get().rows) return;
 
-    const settle = (count) => {
+    function settle(count) {
         offered.push(count);
         settling = true;
 
@@ -275,18 +293,18 @@ const fit = () => {
         } finally {
             settling = false;
         }
-    };
+    }
 
     if (offered.indexOf(rows) === -1) return settle(rows);
 
     const smallest = Math.min.apply(null, offered);
     if (smallest !== store.get().rows) settle(smallest);
-};
+}
 
-const remeasure = () => {
+function remeasure() {
     offered = [];
     fit();
-};
+}
 
 // The deck is replaced wholesale on every repaint, so focus is put back by name.
 store.subscribe(() => {
@@ -316,15 +334,17 @@ let lastUptime = 0;
 // Asking the platform to start the service is idempotent — a launch into one already running lands on
 // its onRequest and does nothing — so it is safe to repeat while nothing answers, and repeating is what
 // covers the case a socket cannot tell apart on its own: a service that is not slow but gone.
-const relaunch = () => launchService().then(
+function relaunch() {
+    return launchService().then(
     () => {},
     (error) => say(`could not launch the service: ${error.message}`, 'err')
 );
+}
 
 // Twice the greeting: refused first, with the pairing code attached because this page is on loopback and
 // GET /pin has always trusted that, then accepted once the code is handed back. Nothing is typed in here,
 // and the code is kept across restarts, so a reboot does not strand the phone that paired.
-const greeted = (payload) => {
+function greeted(payload) {
     if (payload.ok) return link.send(Send.watch, { logsSince: sinceSeq });
 
     if (!payload.pin) {
@@ -345,9 +365,9 @@ const greeted = (payload) => {
     });
 
     link.send(Send.hello, { pin: payload.pin });
-};
+}
 
-const logged = ({ lines, uptime }) => {
+function logged({ lines, uptime }) {
     // A clock that went backward means a different process, so its sequence starts again from one.
     if (uptime + 1000 < lastUptime) {
         sinceSeq = 0;
@@ -373,14 +393,14 @@ const logged = ({ lines, uptime }) => {
         level: line.level || 'info',
         text: line.text
     })), first);
-};
+}
 
 // Every fourth attempt, which with the socket's backoff is a few seconds apart at first and then every
 // twelve. One launch would not be enough: a restart answers before it exits, so the launch that follows
 // the drop can reach the process on its way out and be swallowed.
 const RELAUNCH_EVERY = 4;
 
-const changed = (status, attempt = 0) => {
+function changed(status, attempt = 0) {
     if (status === 'connected') {
         say(`the service answered on port ${PORT}`, 'ok');
         store.update({ restarting: false });
@@ -397,9 +417,9 @@ const changed = (status, attempt = 0) => {
     if (attempt === 30) say('still waiting — the platform can be slow to start it', 'warn');
 
     if (application && attempt % RELAUNCH_EVERY === 0) relaunch();
-};
+}
 
-const restart = () => {
+function restart() {
     if (store.get().restarting) return;
 
     if (!application) {
@@ -419,7 +439,7 @@ const restart = () => {
         say(`the service refused the restart (${failure.message})`, 'err');
         store.update({ restarting: false });
     });
-};
+}
 
 // It is usually already up: config.xml starts it with the television. This is for the set that does
 // not honour that, and it lands on a running service's onRequest otherwise.

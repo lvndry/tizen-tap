@@ -36,7 +36,7 @@ const main = async () => {
         throw friendly(
             `This takes one address, and got: ${argv.positionals.join(' ')}\n\n` +
             '  If that second one is a PIN: this command has no use for it. The PIN\n' +
-            '  reaches sdbd through Tizen Homebrew, and installing needs sdbd directly,\n' +
+            '  reaches sdbd through Tizen Tap, and installing needs sdbd directly,\n' +
             '  which a television pinned to 127.0.0.1 does not allow from here.\n\n' +
             `  A set that far along updates over the LAN:  npm run push -- ${given} <pin>`
         );
