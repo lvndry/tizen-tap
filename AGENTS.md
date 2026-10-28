@@ -72,6 +72,31 @@ PIN relay is how you get the current one. It is minted once at first start
 and kept across restarts, so cache it. Five wrong guesses lock pairing
 for five minutes — back off, do not hammer.
 
+### Getting one answer instead of five
+
+`GET /dev/status` (in **every** build — unlike the other `/dev/*` routes it is
+not behind `HOMEBREW_DEV`; it is PIN-gated) returns the whole stack in one
+shape — developer mode + IP, sdbd process/port/handshake, root channel,
+Stremio, boot type, recent errors — **plus `diagnosis`**, a plain-English
+sentence naming the single most-likely problem and the one action that
+fixes it (secondary issues appended as `Also: …`). Ask it *first*, before
+probing anything by hand. Examples of what it says:
+
+- `"sdbd is up but is rejecting the loopback handshake — the Developer Mode
+  IP is set to another machine (often the Mac's LAN IP). Set it to 127.0.0.1
+  in Developer Mode, then toggle the mode off/on."`
+- `"root channel is not armed — POST /dev/root/arm."`
+- `"Everything looks healthy."`
+
+Probe caveats baked in (learned the hard way): the developer IP is only read
+via root exec when the root channel is connected — otherwise it reports
+`unknown`, it never guesses. sdbd serves **one client session at a time**, so
+while the root agent is armed a bare handshake probe always loses; the
+endpoint reports `ok` by construction in that case. Stremio is probed on the
+service's own LAN IPv4, not `127.0.0.1` — Tizen per-app network namespaces
+do not share loopback.
+
+
 ## The toolbox (sibling repo, plain Node)
 
 ```

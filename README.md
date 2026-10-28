@@ -45,11 +45,11 @@ call, what the TV's state actually is and what's wrong.
 releases, a `.wgt` from your phone, a USB stick, or any direct URL. Each
 package is re-signed for your TV in ~150 ms.
 
-**Keep things alive.** Installed services are watched and relaunched; a root
-watchdog (see [Root](#root)) covers the wake-up cases the platform itself
-misses. The repo ships [stremio/](stremio/) — Stremio's streaming server as a
-Tizen service, so the TV streams its own torrents with no computer on the
-network.
+**Keep things alive.** Installed services are watched and relaunched, the
+root channel re-arms itself, and `GET /dev/status` says when something
+didn't come back. The repo ships [stremio/](stremio/) — Stremio's streaming
+server as a Tizen service, so the TV streams its own torrents with no
+computer on the network.
 
 **Show what's happening.** A dmesg-style log on the TV itself: what it
 installed, when, how long, what failed and why — plus the current PIN and a
@@ -132,21 +132,28 @@ Developer Mode setup, sdb from your laptop. No install needed.
 ## Root
 
 With the [companion root setup](docs/sdbd-and-root.md), the service reaches
-the TV's sdb daemon and runs commands as **uid 0** over a loopback channel.
-That's how the Host PC IP was moved to `127.0.0.1` permanently, and how the
-**root watchdog** works:
+the TV's sdb daemon and runs commands as **uid 0** over a loopback channel —
+the only path to the parts of the TV the app sandbox can't touch.
 
-- A small shell script, installed once as root, checks every 30 s whether the
-  stack it depends on is alive — sdbd, the homebrew service — and brings it
-  back if not.
-- It does not care *why* things are down: boot, standby resume (the "power
-  button" on this firmware is a deep sleep, not a boot, and the platform's
-  `on-boot` flag fires for neither), a crash, or an update.
-- It self-heals the whole chain: sdbd back → root channel can re-arm →
-  homebrew service back → Stremio and Bonsoir relaunched by the service's
-  own companion logic.
+What self-heals on its own, zero involvement:
 
-One-time install, zero involvement afterwards.
+- **Root re-arms after every power cycle** via a sdb injection that runs the
+  signed agent under sdbd's privileges. If the channel drops (a wgt
+  self-install does), `POST /dev/root/arm`.
+- **Stremio and Bonsoir revive** — the service probes their ports on every
+  start and relaunches whatever is silent.
+- **`GET /dev/status` says when something didn't heal** instead of leaving
+  you to find out (see [what the service gives you](#what-it-does)).
+
+The **root watchdog** (`tools/root/watchdog.sh`) is the safety net for the
+case those miss: on this firmware the power button is a standby resume, not
+a boot, so the platform's `on-boot` flag fires for neither, and a standby
+resume can leave the service down. It checks every 30 s that sdbd and the
+service are alive and brings back whichever isn't. It's designed and in the
+repo but **not yet installable on the CU7105** — a detached root process
+doesn't survive the root channel, UEP blocks unsigned scripts, and the system
+dirs are read-only. Until that lands, auto-arm + revive is the net, and
+`/dev/status` names the gap if it ever bites.
 
 ## How it works
 
