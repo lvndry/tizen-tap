@@ -63,7 +63,7 @@ const settingsFile = path.join(dataPath, 'server-settings.json');
 
 if (!fs.existsSync(settingsFile)) {
     const settings = {
-        serverVersion: '4.21.2',
+        serverVersion: '4.22.4',
         appPath: dataPath,
         cacheRoot: dataPath,
         cacheRootVersion: 0,

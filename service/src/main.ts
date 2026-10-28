@@ -404,8 +404,10 @@ function start() {
                 root.arming = true;
                 rootArm.arm(sdb, root.channel, (line) => svc.info(line)).then(() => {
                     root.arming = false;
+                    status.noteArmError(null);
                 }).catch((error) => {
                     root.arming = false;
+                    status.noteArmError(error.message);
                     svc.warn(`root arm: ${error.message}`);
                     if (attemptsLeft > 0) setTimeout(() => tryArm(attemptsLeft - 1), 30000);
                 });
