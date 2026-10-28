@@ -6,10 +6,11 @@
 // questions unauthenticated so a browser tab can tell the service is alive.
 //
 // GET /dev/status (PIN-gated) is the doctor's view: it probes sdbd, the root
-// channel, the companion services and the boot clock, then answers one
-// question — what is broken, and what does the fix look like. Every probe is
-// injectable into buildStatus so the composition is testable without a
-// television.
+// channel, the companion services, memory and the boot clock, then answers one
+// question — what is broken, and what does the fix look like. The memory and
+// oom blocks surface the kernel's kill log, so a service that died of memory
+// pressure can be diagnosed in the same call. Every probe is injectable into
+// buildStatus so the composition is testable without a television.
 //
 // register(ctx, router) wires the handlers. The context carries the state the
 // handlers read: the store, the platform probe, the build facts, the root
@@ -20,6 +21,7 @@
 
 const { json, failure } = require('../http/respond.ts');
 const { ErrorCode } = require('../protocol.ts');
+const { recentLaunches } = require('../launches.ts');
 
 const SDBD_PORT = 26101;
 const STREMIO_PORT = 11470;
@@ -31,6 +33,27 @@ const DEVELOPER_COMMAND = 'buxton2ctl get system db/sdk/develop/ip; buxton2ctl g
 
 // sdbd runs in the system domain, which the app's /proc view does not cover.
 const SDBD_PIDOF_COMMAND = 'pidof sdbd >/dev/null 2>&1 && echo yes || echo no';
+
+// The kernel's kill log: the OOM killer's reaping lines are the only record
+// of a service dying of memory pressure, and dmesg is the one place on this
+// firmware that keeps it across service restarts. It is the slowest probe
+// (~1-2 s over the root channel), so buildStatus runs it in parallel.
+const OOM_DMESG_COMMAND = "dmesg 2>/dev/null | grep -E 'oom_reaper: reaping process|Killed process' | tail -12";
+
+// The OOM killer truncates the comm field to 15 characters, so a reaped app
+// appears as `(newslO9NqF.stre)`. Match on the package-id prefix instead: both
+// Stremio ids survive the truncation intact.
+const STREMIO_PKG_IDS = ['newslO9NqF', 'S6K2WQ8MnP'];
+
+// Pressure thresholds, tuned for this set: ~1.6 GB shared between the firmware,
+// the UI and every installed app, with ~50 MB of swap. The kernel reaps around
+// 10-15% MemAvailable, so that is the critical line; below 25% a heavy app can
+// no longer assume it will fit, which is worth surfacing before the kills start.
+const PRESSURE_CRITICAL_AVAIL = 0.10;
+const PRESSURE_LOW_AVAIL = 0.25;
+// Swap on this firmware is a scratchpad: once it is nearly gone, the kernel has
+// nowhere to page a service to before reaping it.
+const PRESSURE_CRITICAL_SWAP = 0.01;
 
 // The last reading of the developer-mode settings, kept because a root read is
 // only possible while the channel is armed, and the answer still matters after
@@ -69,6 +92,61 @@ function parseBuxton2(output) {
     return result;
 }
 
+// One read of /proc/meminfo, no root needed: the app's sandbox sees the whole
+// system's memory counters. Values arrive in kB and are reported in MB.
+function parseMeminfo(text) {
+    const values: Record<string, number> = {};
+
+    for (const line of String(text == null ? '' : text).split('\n')) {
+        const match = line.match(/^(\w+):\s+(\d+)\s*kB/);
+        if (match) values[match[1]] = Number(match[2]);
+    }
+
+    const total = values.MemTotal;
+    if (!total) return null;
+
+    const available = values.MemAvailable || 0;
+    const swapTotal = values.SwapTotal || 0;
+    const swapFree = values.SwapFree || 0;
+
+    let pressure: 'ok' | 'low' | 'critical' = 'ok';
+
+    if (available < total * PRESSURE_CRITICAL_AVAIL || (swapTotal > 0 && swapFree < swapTotal * PRESSURE_CRITICAL_SWAP)) {
+        pressure = 'critical';
+    } else if (available < total * PRESSURE_LOW_AVAIL) {
+        pressure = 'low';
+    }
+
+    const mb = (kb) => Math.round(kb / 1024);
+
+    return {
+        total_mb: mb(total),
+        free_mb: mb(values.MemFree || 0),
+        available_mb: mb(available),
+        swap_total_mb: mb(swapTotal),
+        swap_free_mb: mb(swapFree),
+        pressure
+    };
+}
+
+// dmesg kill lines, newest last (dmesg's own order): the kernel timestamp,
+// the pid, and the truncated app name in parentheses, kept as-is — even at 15
+// characters the package id is still identifiable.
+function parseOomKills(output) {
+    const kills: { kernel_ts: number | null, pid: number, pkg: string }[] = [];
+
+    for (const line of String(output == null ? '' : output).split('\n')) {
+        const kill = line.match(/oom_reaper: reaping process (\d+) \(([^)]+)\)/) ||
+            line.match(/Killed process (\d+) \(([^)]+)\)/);
+        if (!kill) continue;
+
+        const ts = line.match(/^\[\s*([\d.]+)\]/);
+        kills.push({ kernel_ts: ts ? Number(ts[1]) : null, pid: Number(kill[1]), pkg: kill[2] });
+    }
+
+    return kills;
+}
+
 const MSG_SDBD_DOWN = 'sdbd is not running — toggle Developer Mode off/on in Settings → General → ' +
     'Developer mode, then wait ~30 s.';
 const MSG_IP_MISMATCH = 'sdbd is up but is rejecting the loopback handshake — the Developer Mode IP is ' +
@@ -76,6 +154,14 @@ const MSG_IP_MISMATCH = 'sdbd is up but is rejecting the loopback handshake — 
     'toggle the mode off/on.';
 const MSG_ROOT_NOT_ARMED = 'root channel is not armed — POST /dev/root/arm.';
 const MSG_STREMIO_DOWN = 'Stremio server is down — relaunch the Tizen Tap app or POST /restart.';
+const MSG_STREMIO_OOM = 'Stremio server is down and the kernel\'s OOM killer has reaped Stremio processes recently — ' +
+    'the TV is out of memory; the service relaunches it, and freeing RAM (TV: Settings → Device care → RAM, or close ' +
+    'open apps) is the real fix.';
+
+function memoryCriticalMessage(memory) {
+    return `memory pressure is critical (MemAvailable ${memory.available_mb} MB of ${memory.total_mb} MB) — ` +
+        'expect services to be killed by the kernel until RAM frees up.';
+}
 
 // Pure: given a /dev/status state, say what is wrong. The first matching rule
 // leads; every other rule that also matches is appended as "Also: …".
@@ -91,8 +177,20 @@ function diagnose(state) {
     const rootNotArmed = !state.root.root && state.sdbd.port === 'open' && state.sdbd.handshake === 'ok';
     const stremioDown = state.services.stremio.up === false;
 
+    // The OOM verdict is specific: a recent kernel kill of a Stremio package
+    // proves the down server was reaped, not merely failed to start.
+    const stremioOomKilled = stremioDown &&
+        Array.isArray(state.oom && state.oom.kills) &&
+        state.oom.kills.some((kill) => STREMIO_PKG_IDS.some((id) => kill.pkg.indexOf(id) !== -1));
+
     if (rootNotArmed) rules.push(MSG_ROOT_NOT_ARMED);
-    if (stremioDown) rules.push(MSG_STREMIO_DOWN);
+    if (stremioDown) rules.push(stremioOomKilled ? MSG_STREMIO_OOM : MSG_STREMIO_DOWN);
+
+    // Redundant when the OOM verdict already explains the kills, otherwise the
+    // critical memory is its own problem worth naming.
+    if (!stremioOomKilled && state.memory && state.memory.pressure === 'critical') {
+        rules.push(memoryCriticalMessage(state.memory));
+    }
 
     if (rules.length === 0) return 'Everything looks healthy.';
 
@@ -109,11 +207,22 @@ function diagnose(state) {
 async function buildStatus(probes) {
     const root = probes.rootStatus();
 
+    // Every probe starts before any is awaited: the endpoint's whole cost is
+    // its slowest probe (the dmesg scan over the root channel), not their sum.
+    const developerExec = root.root ? probes.rootExec(DEVELOPER_COMMAND) : null;
+    const oomExec = root.root
+        ? probes.rootExec(OOM_DMESG_COMMAND).catch(() => null)
+        : null;
+    const sdbdProcessPromise = probes.scanProc(root.root ? probes.rootExec : null);
+    const portPromise = probes.portProbe(SDBD_PORT, PORT_PROBE_MS);
+    const stremioPromise = probes.stremio();
+    const meminfoPromise = Promise.resolve(probes.meminfo()).catch(() => null);
+
     let developer: { mode: boolean | null, ip: string | null, source: 'root-read' | 'last-known' | 'unknown' } = { mode: null, ip: null, source: 'unknown' };
 
     if (root.root) {
         try {
-            const parsed = parseBuxton2(await probes.rootExec(DEVELOPER_COMMAND));
+            const parsed = parseBuxton2(await developerExec);
 
             if (parsed.ip !== null && parsed.mode !== null) {
                 lastKnown = { ip: parsed.ip, mode: parsed.mode };
@@ -128,10 +237,8 @@ async function buildStatus(probes) {
         }
     }
 
-    // The sandboxed /proc scan cannot see sdbd, so while root is armed the probe
-    // may fall back to asking root via pidof; otherwise it scans alone.
-    const sdbdProcess = await probes.scanProc(root.root ? probes.rootExec : null);
-    const port = await probes.portProbe(SDBD_PORT, PORT_PROBE_MS);
+    const sdbdProcess = await sdbdProcessPromise;
+    const port = await portPromise;
     let handshake = 'untested';
 
     if (port === 'open') {
@@ -142,14 +249,31 @@ async function buildStatus(probes) {
         handshake = root.root ? 'ok' : await probes.handshake();
     }
 
-    const stremio = await probes.stremio();
+    const stremio = await stremioPromise;
     const uptime = probes.uptimeSeconds();
+    const memory = parseMeminfo(await meminfoPromise);
+
+    // root-required: the channel is not connected; root-error: connected, but
+    // the dmesg scan itself failed — kills are empty in both, but the reason differs.
+    let oom: { kills: ReadonlyArray<{ kernel_ts: number | null, pid: number, pkg: string }>, source: 'root-dmesg' | 'root-required' | 'root-error' };
+
+    if (oomExec) {
+        const output = await oomExec;
+        oom = output === null
+            ? { kills: [], source: 'root-error' }
+            : { kills: parseOomKills(output), source: 'root-dmesg' };
+    } else {
+        oom = { kills: [], source: 'root-required' };
+    }
 
     const state = {
         developer,
         sdbd: { process: sdbdProcess, port, handshake, lastArmError },
         root,
         services: { homebrew: 'up', stremio },
+        memory,
+        oom,
+        launches: probes.launches(),
         boot: {
             uptime_s: typeof uptime === 'number' ? Math.round(uptime) : null,
             // This firmware's power button is deep sleep, so a fresh /proc/uptime is the only
@@ -268,6 +392,14 @@ function realStremio(host, port) {
 function realUptimeSeconds() {
     try {
         return Number(require('fs').readFileSync('/proc/uptime', 'utf8').split(' ')[0]);
+    } catch (e) {
+        return null;
+    }
+}
+
+function realMeminfo() {
+    try {
+        return require('fs').readFileSync('/proc/meminfo', 'utf8');
     } catch (e) {
         return null;
     }
@@ -394,6 +526,8 @@ function register(ctx, router) {
                 handshake: realHandshake,
                 stremio: realStremio,
                 uptimeSeconds: realUptimeSeconds,
+                meminfo: realMeminfo,
+                launches: () => recentLaunches(10),
                 recentErrors: () => realRecentErrors(ctx.recorded)
             }));
         } catch (error) {
@@ -405,4 +539,7 @@ function register(ctx, router) {
     ctx.lanAddresses = lanAddresses;
 }
 
-module.exports = { register, buildStatus, diagnose, parseBuxton2, noteArmError, realScanProc, realStremio, stremioLanHost };
+module.exports = {
+    register, buildStatus, diagnose, parseBuxton2, noteArmError, realScanProc, realStremio, stremioLanHost,
+    parseMeminfo, parseOomKills, realMeminfo, OOM_DMESG_COMMAND, STREMIO_PKG_IDS
+};

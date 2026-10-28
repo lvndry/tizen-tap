@@ -1,11 +1,37 @@
 // Unit tests for the /dev/status doctor: the pure diagnose rules, the
-// buxton2ctl line parser, and the buildStatus composition over fake probes,
-// so nothing here touches a network or /proc.
+// buxton2ctl line parser, the meminfo and OOM kill parsers, and the
+// buildStatus composition over fake probes, so nothing here touches a
+// network or /proc.
 
 'use strict';
 
 const { test, expect } = require('bun:test');
-const { diagnose, parseBuxton2, buildStatus, noteArmError, realScanProc, realStremio } = require('../src/routes/status.ts');
+const {
+    diagnose, parseBuxton2, buildStatus, noteArmError, realScanProc, realStremio,
+    parseMeminfo, parseOomKills, OOM_DMESG_COMMAND, STREMIO_PKG_IDS
+} = require('../src/routes/status.ts');
+const { noteLaunch, recentLaunches, clearLaunches, LAUNCH_RING_CAP } = require('../src/launches.ts');
+
+const OK_MEMINFO =
+    'MemTotal:       1648512 kB\n' + // 1610 MB exactly
+    'MemFree:         120576 kB\n' + // 118 MB
+    'MemAvailable:    483328 kB\n' + // 472 MB
+    'SwapTotal:        50176 kB\n' + // 49 MB
+    'SwapFree:         49152 kB\n';  // 48 MB
+
+const LOW_MEMINFO =
+    'MemTotal:       1648512 kB\n' +
+    'MemFree:         102400 kB\n' +
+    'MemAvailable:    307200 kB\n' + // 300 MB of 1610 = 18.6% → low
+    'SwapTotal:        50176 kB\n' +
+    'SwapFree:         49152 kB\n';
+
+const CRITICAL_MEMINFO =
+    'MemTotal:       1648512 kB\n' +
+    'MemFree:          61440 kB\n' + // 60 MB
+    'MemAvailable:     194560 kB\n' + // 190 MB of 1610 ≈ 11.8% → critical
+    'SwapTotal:        50000 kB\n' +
+    'SwapFree:           12 kB\n';
 
 function healthy() {
     return {
@@ -13,6 +39,9 @@ function healthy() {
         sdbd: { process: true, port: 'open', handshake: 'ok', lastArmError: null },
         root: { root: true, identity: 'agent' },
         services: { homebrew: 'up', stremio: { up: true, serverVersion: '4.4.2' } },
+        memory: { total_mb: 1610, free_mb: 118, available_mb: 472, swap_total_mb: 49, swap_free_mb: 48, pressure: 'ok' },
+        oom: { kills: [], source: 'root-dmesg' },
+        launches: [],
         boot: { uptime_s: 3600, type: 'standby-resume' },
         recent_errors: []
     };
@@ -20,16 +49,41 @@ function healthy() {
 
 // Probes that produce exactly the state given.
 function probesFor(state) {
+    const execs = [];
+
     return {
         rootStatus: () => state.root,
-        rootExec: async () => '[system] db/sdk/develop/ip = String: 127.0.0.1\n[system] db/sdk/develop/mode = Int32: 1',
+        rootExec: async (command) => {
+            execs.push(command);
+            if (command === OOM_DMESG_COMMAND) {
+                // Render the state's kills back into dmesg lines the parser understands.
+                if (state.oom.source !== 'root-dmesg') return null;
+                return (state.oom.kills || []).map((kill) =>
+                    `[${kill.kernel_ts == null ? '0.0' : kill.kernel_ts}] oom_reaper: reaping process ${kill.pid} (${kill.pkg}) skipped`).join('\n');
+            }
+            return '[system] db/sdk/develop/ip = String: 127.0.0.1\n[system] db/sdk/develop/mode = Int32: 1';
+        },
         scanProc: async () => state.sdbd.process,
         portProbe: async () => state.sdbd.port,
         handshake: async () => state.sdbd.handshake,
         stremio: async () => state.services.stremio,
         uptimeSeconds: () => state.boot.uptime_s,
-        recentErrors: () => state.recent_errors
+        meminfo: async () => meminfoFor(state.memory),
+        launches: () => state.launches,
+        recentErrors: () => state.recent_errors,
+        execs
     };
+}
+
+// Invert the MB rounding for the probes: enough to round back to the same block.
+function meminfoFor(memory) {
+    if (!memory) return null;
+
+    return 'MemTotal: ' + memory.total_mb * 1024 + ' kB\n' +
+        'MemFree: ' + memory.free_mb * 1024 + ' kB\n' +
+        'MemAvailable: ' + memory.available_mb * 1024 + ' kB\n' +
+        'SwapTotal: ' + memory.swap_total_mb * 1024 + ' kB\n' +
+        'SwapFree: ' + memory.swap_free_mb * 1024 + ' kB\n';
 }
 
 test('diagnose: a healthy set says so', () => {
@@ -97,6 +151,68 @@ test('diagnose: a down Stremio server names the restart', () => {
     expect(diagnose(state)).toBe('Stremio server is down — relaunch the Tizen Tap app or POST /restart.');
 });
 
+test('diagnose: a recent OOM kill of a Stremio package beats the plain down rule', () => {
+    const state = healthy();
+    state.services.stremio = { up: false, serverVersion: null };
+    state.oom = {
+        kills: [{ kernel_ts: 35467.891, pid: 391, pkg: 'newslO9NqF.stre' }],
+        source: 'root-dmesg'
+    };
+
+    expect(diagnose(state)).toBe(
+        'Stremio server is down and the kernel\'s OOM killer has reaped Stremio processes recently — ' +
+        'the TV is out of memory; the service relaunches it, and freeing RAM (TV: Settings → Device care → RAM, ' +
+        'or close open apps) is the real fix.');
+});
+
+test('diagnose: a kill of an unrelated package keeps the plain down rule', () => {
+    const state = healthy();
+    state.services.stremio = { up: false, serverVersion: null };
+    state.oom = { kills: [{ kernel_ts: 100, pid: 10, pkg: 'com.other.app' }], source: 'root-dmesg' };
+
+    expect(diagnose(state)).toBe('Stremio server is down — relaunch the Tizen Tap app or POST /restart.');
+});
+
+test('diagnose: an OOM verdict with critical memory does not repeat the memory rule', () => {
+    const state = healthy();
+    state.services.stremio = { up: false, serverVersion: null };
+    state.oom = { kills: [{ kernel_ts: 100, pid: 391, pkg: 'S6K2WQ8MnP.Strem' }], source: 'root-dmesg' };
+    state.memory = { total_mb: 1610, free_mb: 60, available_mb: 190, swap_total_mb: 49, swap_free_mb: 0, pressure: 'critical' };
+
+    const verdict = diagnose(state);
+
+    expect(verdict).toContain('OOM killer has reaped Stremio processes recently');
+    expect(verdict).not.toContain('memory pressure is critical');
+});
+
+test('diagnose: critical memory without an OOM kill says so', () => {
+    const state = healthy();
+    state.memory = { total_mb: 1610, free_mb: 60, available_mb: 190, swap_total_mb: 49, swap_free_mb: 0, pressure: 'critical' };
+
+    expect(diagnose(state)).toBe(
+        'memory pressure is critical (MemAvailable 190 MB of 1610 MB) — expect services to be killed by the kernel until RAM frees up.');
+});
+
+test('diagnose: low memory pressure is not reported', () => {
+    const state = healthy();
+    state.memory = { total_mb: 1610, free_mb: 118, available_mb: 400, swap_total_mb: 49, swap_free_mb: 48, pressure: 'low' };
+
+    expect(diagnose(state)).toBe('Everything looks healthy.');
+});
+
+test('diagnose: critical memory appends after the sdbd problem', () => {
+    const state = healthy();
+    state.sdbd.port = 'refused';
+    state.sdbd.handshake = 'untested';
+    state.memory = { total_mb: 1610, free_mb: 60, available_mb: 150, swap_total_mb: 49, swap_free_mb: 0, pressure: 'critical' };
+
+    const verdict = diagnose(state);
+
+    expect(verdict.startsWith('sdbd is not running — toggle Developer Mode')).toBe(true);
+    expect(verdict).toContain('Also: memory pressure is critical (MemAvailable 150 MB of 1610 MB)');
+    expect(verdict.endsWith('until RAM frees up.')).toBe(true);
+});
+
 test('diagnose: secondary issues are appended after the first match', () => {
     const state = healthy();
     state.sdbd.handshake = 'rejected';
@@ -135,10 +251,103 @@ test('parseBuxton2: malformed output leaves the unknown part null rather than gu
     expect(parsed.mode).toBe(null);
 });
 
+test('parseMeminfo: a normal reading is ok, in MB', () => {
+    expect(parseMeminfo(OK_MEMINFO)).toEqual({
+        total_mb: 1610, free_mb: 118, available_mb: 472, swap_total_mb: 49, swap_free_mb: 48, pressure: 'ok'
+    });
+});
+
+test('parseMeminfo: available under 25% is low, under 10% is critical', () => {
+    expect(parseMeminfo(LOW_MEMINFO).pressure).toBe('low');
+
+    // The live reading that caused the outages: ~190 MB available of 1.6 GB.
+    expect(parseMeminfo(CRITICAL_MEMINFO)).toEqual({
+        total_mb: 1610, free_mb: 60, available_mb: 190, swap_total_mb: 49, swap_free_mb: 0, pressure: 'critical'
+    });
+});
+
+test('parseMeminfo: an almost-empty swap is critical even with available headroom', () => {
+    const text =
+        'MemTotal:       1648512 kB\n' +
+        'MemFree:          98304 kB\n' +
+        'MemAvailable:    520192 kB\n' + // 31%, well above the low line
+        'SwapTotal:        50000 kB\n' +
+        'SwapFree:           307 kB\n';  // 0.6% of total
+
+    expect(parseMeminfo(text).pressure).toBe('critical');
+});
+
+test('parseMeminfo: no swap at all does not trigger the swap rule', () => {
+    const text =
+        'MemTotal:       1648512 kB\n' +
+        'MemFree:          98304 kB\n' +
+        'MemAvailable:    520192 kB\n' +
+        'SwapTotal:           0 kB\n' +
+        'SwapFree:             0 kB\n';
+
+    expect(parseMeminfo(text).pressure).toBe('ok');
+});
+
+test('parseMeminfo: unparseable input is null, not a guess', () => {
+    expect(parseMeminfo('')).toBe(null);
+    expect(parseMeminfo(null)).toBe(null);
+});
+
+test('parseOomKills: the oom_reaper and Killed process formats, truncated pkg kept as-is', () => {
+    const output =
+        '[35467.891012] oom_reaper: reaping process 391 (newslO9NqF.stre) skipped\n' +
+        '[35468.002113] Killed process 391 (newslO9NqF.stre) total-vm:524288kB, anon-rss:412672kB, file-rss:0kB\n';
+
+    expect(parseOomKills(output)).toEqual([
+        { kernel_ts: 35467.891012, pid: 391, pkg: 'newslO9NqF.stre' },
+        { kernel_ts: 35468.002113, pid: 391, pkg: 'newslO9NqF.stre' }
+    ]);
+});
+
+test('parseOomKills: a line without a kernel timestamp keeps the kill with a null ts', () => {
+    const parsed = parseOomKills('oom_reaper: reaping process 777 (bonsoir.svc1) skipped');
+
+    expect(parsed).toEqual([{ kernel_ts: null, pid: 777, pkg: 'bonsoir.svc1' }]);
+});
+
+test('parseOomKills: empty or unrelated output yields no kills', () => {
+    expect(parseOomKills('')).toEqual([]);
+    expect(parseOomKills(null)).toEqual([]);
+    expect(parseOomKills('[1.0] out of memory: Killed process 5 (init) total-vm:1kB\n[2.0] something else')).toEqual(
+        [{ kernel_ts: 1.0, pid: 5, pkg: 'init' }]);
+    expect(parseOomKills('[1.0] no memory trouble here\n[2.0] another line')).toEqual([]);
+});
+
+test('STREMIO_PKG_IDS: both ids survive the 15-character truncation', () => {
+    for (const id of STREMIO_PKG_IDS) {
+        expect(id.length).toBeLessThan(15);
+    }
+});
+
+test('launch ring: noteLaunch records, recentLaunches orders oldest first, capped at 20', () => {
+    clearLaunches();
+
+    for (let i = 0; i < LAUNCH_RING_CAP + 5; i += 1) noteLaunch(`app${i}`, 'periodic check');
+
+    const all = recentLaunches(LAUNCH_RING_CAP);
+
+    expect(all.length).toBe(LAUNCH_RING_CAP);
+    expect(all[0].app).toBe('app5'); // the oldest surviving entry
+    expect(all[all.length - 1].app).toBe(`app${LAUNCH_RING_CAP + 4}`);
+    for (const entry of all) expect(typeof entry.ts).toBe('string');
+
+    const ten = recentLaunches(10);
+    expect(ten.length).toBe(10);
+    expect(ten[ten.length - 1].app).toBe(`app${LAUNCH_RING_CAP + 4}`);
+
+    clearLaunches();
+});
+
 test('buildStatus: without root the developer block is nulls and unknown', async () => {
     noteArmError(null);
     const state = healthy();
     state.root = { root: false, identity: null };
+    state.oom = { kills: [], source: 'root-required' };
     state.recent_errors = ['root arm: sdbd refused', 'install failed for x.wgt'];
 
     const status = await buildStatus(probesFor(state));
@@ -176,7 +385,8 @@ test('buildStatus: a partial root read falls back to the cache', async () => {
     await buildStatus(probesFor(state));
 
     const partial = probesFor(state);
-    partial.rootExec = async () => '[system] db/sdk/develop/ip = String: 192.168.1.20\nmode = Int32: banana';
+    partial.rootExec = async (command) => command === OOM_DMESG_COMMAND ? '' :
+        '[system] db/sdk/develop/ip = String: 192.168.1.20\nmode = Int32: banana';
 
     const status = await buildStatus(partial);
 
@@ -272,6 +482,82 @@ test('buildStatus: the process probe gets the root exec only while root is conne
     expect(seen[1]).toBe(null);
 });
 
+test('buildStatus: the memory and oom blocks appear in the response', async () => {
+    clearLaunches();
+    noteLaunch('S6K2WQ8MnP.StremioServer', 'periodic check');
+
+    const state = healthy();
+    state.oom = { kills: [{ kernel_ts: 35467.891012, pid: 391, pkg: 'newslO9NqF.stre' }], source: 'root-dmesg' };
+    state.launches = recentLaunches(10);
+
+    const status = await buildStatus(probesFor(state));
+
+    expect(status.memory).toEqual({
+        total_mb: 1610, free_mb: 118, available_mb: 472, swap_total_mb: 49, swap_free_mb: 48, pressure: 'ok'
+    });
+    expect(status.oom).toEqual(state.oom);
+    expect(status.launches).toEqual([{ ts: state.launches[0].ts, app: 'S6K2WQ8MnP.StremioServer', reason: 'periodic check' }]);
+
+    clearLaunches();
+});
+
+test('buildStatus: without root the oom block is root-required with empty kills', async () => {
+    const state = healthy();
+    state.root = { root: false, identity: null };
+    state.oom = { kills: [], source: 'root-required' };
+
+    const status = await buildStatus(probesFor(state));
+
+    expect(status.oom).toEqual({ kills: [], source: 'root-required' });
+});
+
+test('buildStatus: a failed dmesg scan is root-error, and a dead meminfo is a null memory block', async () => {
+    const state = healthy();
+
+    const wedged = probesFor(state);
+    wedged.rootExec = async (command) => {
+        if (command === OOM_DMESG_COMMAND) throw new Error('root command timed out');
+        return '[system] db/sdk/develop/ip = String: 127.0.0.1\n[system] db/sdk/develop/mode = Int32: 1';
+    };
+
+    const status = await buildStatus(wedged);
+    expect(status.oom).toEqual({ kills: [], source: 'root-error' });
+
+    const noMemory = probesFor(state);
+    noMemory.meminfo = async () => { throw new Error('/proc unreadable'); };
+
+    const status2 = await buildStatus(noMemory);
+    expect(status2.memory).toBe(null);
+});
+
+test('buildStatus: every probe starts before the slowest one resolves', async () => {
+    const state = healthy();
+    const started = [];
+    let releaseStremio;
+    const stremioGate = new Promise((done) => { releaseStremio = done; });
+
+    const probes = probesFor(state);
+    const original = { rootExec: probes.rootExec, scanProc: probes.scanProc, portProbe: probes.portProbe };
+    const gate = (name) => async (...args) => { started.push(name); return original[name](...args); };
+    probes.rootExec = gate('rootExec');
+    probes.scanProc = gate('scanProc');
+    probes.portProbe = gate('portProbe');
+    probes.stremio = async () => { started.push('stremio'); await stremioGate; return state.services.stremio; };
+
+    const pending = buildStatus(probes);
+    await new Promise((done) => setTimeout(done, 0));
+
+    // The dmesg scan is still pending behind the slow stremio probe, yet it
+    // already ran: nothing waited on anything else.
+    expect(started).toContain('rootExec');
+    expect(started).toContain('scanProc');
+    expect(started).toContain('portProbe');
+    expect(started).toContain('stremio');
+
+    releaseStremio();
+    await pending;
+});
+
 test('realScanProc: the root pidof answer ORs into the sandboxed scan', async () => {
     // The dev machine's /proc has no sdbd, so only the root tier can turn this true.
     expect(await realScanProc(null)).toBe(false);
@@ -294,4 +580,3 @@ test('realStremio: probes the injected host and port, not hardcoded loopback', a
 
     expect(result).toEqual({ up: true, serverVersion: '4.4.2' });
 });
-

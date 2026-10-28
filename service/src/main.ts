@@ -50,6 +50,8 @@ const ui = require('./routes/ui.ts');
 const rootRoutes = require('./routes/root.ts');
 const { RootChannel } = require('./root/channel.ts');
 const rootArm = require('./root/arm.ts');
+const { makePortProbe, createWatchdog, stremioLanHost } = require('./revive.ts');
+const { noteLaunch } = require('./launches.ts');
 
 const { ErrorCode } = protocol;
 
@@ -96,22 +98,23 @@ function isBootStart() {
 //
 // Every start of this service walks the list; each companion checks twice —
 // immediately, then a minute later — because the services boot in parallel
-// and the first look can race the other start.
+// and the first look can race the other start. Stremio keeps being checked
+// afterwards: its server has been seen dying hours into a session, with
+// nothing to notice, so the start-time windows are backed by a periodic
+// sweep (see revive.ts).
 function reviveCompanions() {
     const companion = log.on(Facility.SVC);
 
-    function probePort(port: number) {
-    return new Promise((resolve) => {
-        const req = require('http').get(
-            { host: '127.0.0.1', port, timeout: 1500 },
-            (res) => { resolve(true); res.resume(); res.on('end', () => {}); }
-        );
-        req.on('timeout', () => { req.destroy(); resolve(false); });
-        req.on('error', () => resolve(false));
-    });
-}
+    // Probes over the TV's own LAN IPv4, never 127.0.0.1: Tizen network
+    // namespaces are per-app, so a sibling app's loopback is not this app's
+    // and the port would always read down.
+    const watchdog = createWatchdog({ probe: makePortProbe(stremioLanHost), launch });
 
     function launch(appId: string, name: string, label: string) {
+        // One source of truth for every relaunch this service fires: the ring
+        // is what /dev/status serves, next to the diagnosis.
+        noteLaunch(appId, label);
+
         // Launch the app, not the service: on this firmware a cross-app
         // launch of a service id is a silent no-op, while the app's page
         // starts the service for it through launchAppControl.
@@ -130,10 +133,10 @@ function reviveCompanions() {
         }
     }
 
-    schedule(async (label) => {
-        if (await probePort(11470)) return;
-        launch('S6K2WQ8MnP.StremioServer', 'stremio server', label);
-    });
+    // Same windows and labels as before, but through the watchdog's guarded
+    // check: a slow probe cannot stack a second launch, and the 60 s sweep
+    // keeps the server alive after this start is long over.
+    schedule((label) => watchdog.check(label));
 
     // Every start puts the dashboard back on the glass — standby resume
     // included, since that is how the set is actually turned on. The late
