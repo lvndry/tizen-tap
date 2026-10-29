@@ -1,7 +1,6 @@
 # tizen-tap
 
-**Your Samsung TV installs, updates, and repairs its own apps — no computer
-in the room.**
+**A Samsung TV that installs, updates, and repairs its own apps.**
 
 tizen-tap runs a small service on the TV that re-signs and installs Tizen
 packages over the TV's own loopback, keeps them alive, and shows what it's
@@ -104,32 +103,17 @@ Wake-on-LAN, Developer Mode setup, sdb from your laptop. No install needed.
 
 ## Root
 
-With the [companion root setup](docs/sdbd-and-root.md), the service reaches
-the TV's sdb daemon and runs commands as **uid 0** over a loopback channel
-— the only path to the parts of the TV the app sandbox can't touch. That
-root is **board- and firmware-specific**: the exploit chain was cracked on
-a 2023 Tizen 6.5 board (KSU2E / CU7105) and needs Developer Mode, so a
-different board or a newer firmware may not offer the same entry points —
-`GET /dev/status` shows a failing handshake before anything else does.
+The service can run commands as **uid 0** on the TV — inspect the kernel,
+protect services from the OOM killer, write the settings database, read
+the firmware. [docs/root.md](docs/root.md) covers what it unlocks and how
+to use it; [docs/sdbd-and-root.md](docs/sdbd-and-root.md) is the
+reverse-engineering notes behind it. That root is **board-
+and firmware-specific** — cracked on a 2023 Tizen 6.5 board (KSU2E /
+CU7105), so verify before you assume.
 
-What self-heals on its own, zero involvement:
-
-- **Root re-arms after every power cycle** via a sdb injection that runs
-  the signed agent under sdbd's privileges. If the channel drops (a wgt
-  self-install does), `POST /dev/root/arm`.
-- **Stremio and Bonsoir revive** — the service probes their ports on every
-  start and on a 60 s sweep, and relaunches whatever is silent.
-- **`GET /dev/status` says when something didn't heal** instead of leaving
-  you to find out.
-
-The **root watchdog** (`tools/root/watchdog.sh`) is the safety net for the
-cases those miss: on this firmware the power button is a standby resume,
-not a boot, so the platform's `on-boot` flag fires for neither. It's
-designed and in the repo but **not yet installable on the CU7105** — a
-detached root process doesn't survive the root channel, UEP blocks
-unsigned scripts, and the system dirs are read-only. Until that lands,
-auto-arm + revive is the net, and `/dev/status` names the gap if it ever
-bites.
+It also self-heals on its own: the root channel re-arms after every power
+cycle, the service revives Stremio and Bonsoir on a 60 s sweep, and
+`GET /dev/status` names whatever didn't come back.
 
 ## How it works
 
