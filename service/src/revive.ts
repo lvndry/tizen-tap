@@ -40,11 +40,12 @@ function makePortProbe(host) {
 }
 
 // A probe-and-relaunch watchdog. `probe` reports whether the port answers,
-// `launch` relaunches the companion, and `setInterval`/`clearInterval` are the
-// runtime's timer functions (the sweep is unref'd so it never holds the event
-// loop open on its own). The in-flight flag means a check that is still
-// probing is never re-entered: a slow probe cannot queue a second launch.
-function createWatchdog({ probe, launch, intervalMs = PERIODIC_CHECK_MS, setInterval, clearInterval }) {
+// `launch` relaunches the companion, and `setInterval`/`clearInterval` may be
+// injected (tests run the sweep on a fake clock); they default to the runtime
+// timers. The sweep is unref'd so it never holds the event loop open on its
+// own. The in-flight flag means a check that is still probing is never
+// re-entered: a slow probe cannot queue a second launch.
+function createWatchdog({ probe, launch, intervalMs = PERIODIC_CHECK_MS, setInterval = globalThis.setInterval, clearInterval = globalThis.clearInterval }) {
     let inFlight = false;
 
     function check(label) {
