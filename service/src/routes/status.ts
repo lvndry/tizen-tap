@@ -149,9 +149,9 @@ function parseOomKills(output) {
 
 const MSG_SDBD_DOWN = 'sdbd is not running — toggle Developer Mode off/on in Settings → General → ' +
     'Developer mode, then wait ~30 s.';
-const MSG_IP_MISMATCH = 'sdbd is up but is rejecting the loopback handshake — the Developer Mode IP is ' +
-    'set to another machine (often the Mac\'s LAN IP). Set it to 127.0.0.1 in Developer Mode, then ' +
-    'toggle the mode off/on.';
+const MSG_IP_MISMATCH = 'sdbd is up but rejects the handshake. Two causes: (1) stale gate — the running sdbd ' +
+    'loaded the developer IP at restart and it is not 127.0.0.1; (2) a persisted lockout from many arm cycles. ' +
+    'Toggle Developer Mode off/on to restart sdbd; if it still rejects, wait for self-expiry or do a Smart Hub reset.';
 const MSG_ROOT_NOT_ARMED = 'root channel is not armed — POST /dev/root/arm.';
 const MSG_STREMIO_DOWN = 'Stremio server is down — relaunch the Tizen Tap app or POST /restart.';
 const MSG_STREMIO_OOM = 'Stremio server is down and the kernel\'s OOM killer has reaped Stremio processes recently — ' +

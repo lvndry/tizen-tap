@@ -121,13 +121,14 @@ test('diagnose: a refused port suppresses the root-not-armed cascade', () => {
     expect(verdict.endsWith('POST /restart.')).toBe(true);
 });
 
-test('diagnose: a rejected handshake blames the developer-mode IP', () => {
+test('diagnose: a rejected handshake names the two real causes', () => {
     const state = healthy();
     state.sdbd.handshake = 'rejected';
 
     expect(diagnose(state)).toBe(
-        "sdbd is up but is rejecting the loopback handshake — the Developer Mode IP is set to another " +
-        "machine (often the Mac's LAN IP). Set it to 127.0.0.1 in Developer Mode, then toggle the mode off/on.");
+        'sdbd is up but rejects the handshake. Two causes: (1) stale gate — the running sdbd ' +
+        'loaded the developer IP at restart and it is not 127.0.0.1; (2) a persisted lockout from many arm cycles. ' +
+        'Toggle Developer Mode off/on to restart sdbd; if it still rejects, wait for self-expiry or do a Smart Hub reset.');
 });
 
 test('diagnose: an un-armed root channel is rule three, and only with sdbd healthy', () => {
@@ -221,7 +222,7 @@ test('diagnose: secondary issues are appended after the first match', () => {
     const verdict = diagnose(state);
 
     // Root is connected in the healthy base state, so rule three does not fire; Stremio is the only independent issue.
-    expect(verdict.startsWith('sdbd is up but is rejecting the loopback handshake')).toBe(true);
+    expect(verdict.startsWith('sdbd is up but rejects the handshake')).toBe(true);
     expect(verdict).toContain('Stremio server is down — relaunch the Tizen Tap app or POST /restart.');
     expect(verdict.endsWith('POST /restart.')).toBe(true);
 });

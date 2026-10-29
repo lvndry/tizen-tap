@@ -83,9 +83,9 @@ sentence naming the single most-likely problem and the one action that
 fixes it (secondary issues appended as `Also: …`). Ask it *first*, before
 probing anything by hand. Examples of what it says:
 
-- `"sdbd is up but is rejecting the loopback handshake — the Developer Mode
-  IP is set to another machine (often the Mac's LAN IP). Set it to 127.0.0.1
-  in Developer Mode, then toggle the mode off/on."`
+- `"sdbd is up but rejects the handshake. Two causes: (1) stale gate — the running sdbd
+  loaded the developer IP at restart and it is not 127.0.0.1; (2) a persisted lockout from
+  many arm cycles. Toggle Developer Mode off/on to restart sdbd; …"`
 - `"root channel is not armed — POST /dev/root/arm."`
 - `"Everything looks healthy."`
 

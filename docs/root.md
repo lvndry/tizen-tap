@@ -120,6 +120,13 @@ cat /usr/sbin/launch_sdbd.sh
 Write access is narrower: `/usr` and `/` are read-only, `/opt/usr` is
 writable.
 
+### Batch your arm cycles
+
+The root channel itself is cheap, but each arm cycle pushes a signed agent
+through sdbd. After ~18-30 cycles sdbd can hit a persisted handshake
+lockout (see [sdbd-and-root.md](sdbd-and-root.md)). Queue the work first,
+then arm once and run everything in the one window.
+
 ## What root does not do
 
 - It is not a shell session — each `exec` is one command, and the process
