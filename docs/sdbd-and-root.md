@@ -2,6 +2,8 @@
 
 Reverse-engineering notes for the CU7105 (Tizen 6.5, board KSU2E), compiled
 October 2024. Everything here was verified on a live unit, not assumed.
+The tooling used to take the firmware apart is set up in
+[rea-notes.md](rea-notes.md).
 
 ## Expect board and firmware dependence
 
