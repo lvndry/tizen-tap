@@ -50,6 +50,24 @@ const widgetVersion = /<widget\b[^>]*\bversion="([^"]*)"/
 }
 
 {
+    const streamed = fixture.zipAll([
+        {
+            name: 'config.xml',
+            contents: readFileSync(join(__dirname, '..', '..', 'config.xml')),
+            deflate: true,
+            descriptors: true
+        },
+        { name: 'icon.png', contents: fixture.PIXEL, descriptors: true }
+    ]);
+
+    const described = preview.describe(streamed);
+
+    check('a zip that writes its sizes after the data still reads, icon and all',
+        described && described.packageId === 'GJBBYNLkgP' && described.icon !== null,
+        JSON.stringify(described && { ...described, icon: described.icon && 'present' }));
+}
+
+{
     const cut = fixture.wgtWithIcon().slice(0, 200);
 
     check('a package cut off partway through is null, not half an icon',
