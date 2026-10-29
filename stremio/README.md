@@ -54,7 +54,7 @@ That's the whole setup. From then on the TV streams with nothing else on.
 
 | Symptom | Meaning | Fix |
 | --- | --- | --- |
-| `<tv-ip>:11470` = 000, homebrew = 000 | TV off, or cold boot with nothing started | Open Tizen Tap once, or `npm run restart` from samsung-tv-toolbox |
+| `<tv-ip>:11470` = 000, homebrew = 000 | TV off, or cold boot with nothing started | Open Tizen Tap once, or `node launch.js GJBBYNLkgP.TizenHomebrew --wait 8091` from samsung-tv-toolbox |
 | 000, homebrew = 200 | Server process died | Open Tizen Tap again — the revive fires on its start. Still dead? The package may be gone (TV self-updates have been known to wipe it): re-run step 1 |
 | App can't connect, `:11470` = 307 from the LAN | App pointed at `127.0.0.1`, or the TV's IP changed | Re-check the app's server address (step 2); check the reservation (step 3) |
 

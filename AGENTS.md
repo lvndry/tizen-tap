@@ -28,7 +28,7 @@ ping -c1 <tv-ip> && curl -m 2 -o /dev/null -w "%{http_code}\n" \
 node wake.js          # TV is up in ~10s
 
 # 2) TV on, :8091 down (cold boot / after a self-update)? One nudge:
-node restart.js
+node launch.js GJBBYNLkgP.TizenHomebrew --wait 8091
 
 # 3) Now it answers. Everything is JSON:
 curl -H "x-homebrew-pin: 000000" http://<tv-ip>:8091/version
@@ -40,6 +40,7 @@ curl -H "x-homebrew-pin: 000000" http://<tv-ip>:8091/pin     # the current PIN
 curl -X POST -H "x-homebrew-pin: 000000" \
   -H "Content-Type: application/octet-stream" \
   --data-binary @app.wgt http://<tv-ip>:8091/install
+npm run install-app -- <tv-ip> app.wgt --pin 000000   # same, from this repo
 node remote.js power home ok up down left right volumeUp mute
 
 # 5) Leave it running (an agent does not shut a TV down):
@@ -99,33 +100,38 @@ do not share loopback.
 
 ## The toolbox (sibling repo, plain Node)
 
+Generic Samsung TV control; nothing in it knows about Tizen Tap.
+
 ```
 pair.js           one-time pairing; writes token.txt (the only credential)
 remote.js <keys>  send remote keys: power, home, ok, up, volumeUp, mute,
                   or any raw code (KEY_APPS, KEY_RED, ...)
 state.js          ask the TV for its state (often silent — see below)
 listen.js         watch what the TV pushes, live
-wake.js           Wake-on-LAN
-restart.js        relaunch the homebrew service (cold boot / self-update)
-install-app.js    sideload a .wgt by URL or path
+wake.js <MAC>     Wake-on-LAN
+launch.js <appId> [--wait <port>]
+                  launch an app; with --wait, relaunch it unless the port
+                  already answers, then wait for the port
 ```
 
-All of it honours `TV_IP` (default in the toolbox is the TV's address) and reads
-`token.txt` / `hbpin.txt` next to the scripts. The whole auth model is:
-`pair.js` once, then `token.txt` is the key.
+All of it honours `TV_IP` (default `127.0.0.1`, so always set it) and reads
+`token.txt` next to the scripts. The whole auth model is: `pair.js` once,
+then `token.txt` is the key. Installing from a checkout of this repo is
+`npm run install-app -- <tv-ip> <url-or-path> --pin <pin>`.
 
 ## Honest failure modes (do not misdiagnose)
 
 - **`:8091` = 000 and ping fails** → the TV is off. `wake.js`, wait 10s, retry.
 - **`:8091` = 000 and ping works** → service down after cold boot or
-  self-update. `restart.js`. Do not loop it more than ~3 times.
+  self-update. `node launch.js GJBBYNLkgP.TizenHomebrew --wait 8091`. Do not
+  loop it more than ~3 times.
 - **`:8091` = 200 but a call hangs** → the service is wedged. `POST /restart`,
   then retry once.
 - **`state.js` / `listen.js` print nothing** → this model is quiet on the
   remote channel by design. Silence is a working result, not an error. Read
   `/logs` or `/packages` instead.
 - **`/install` returns HTTP 100 / drops the socket** → the self-update path;
-  the connection dies mid-swap. `restart.js` brings it back; the install
+  the connection dies mid-swap. `launch.js` (as above) brings it back; the install
   almost certainly succeeded — verify with `GET /version` (new build) and
   `GET /packages`.
 - **Keys do nothing** → the TV is on a screen that ignores that key, or it is
@@ -161,8 +167,8 @@ Treat these as load-bearing, not guesses:
 - **It revives itself, but only when homebrew starts.** The homebrew service
   probes `11470` at 3s and 60s on every start and cross-launches the app if
   the port is silent (search its `/logs` for `stremio`). A cold boot that
-  leaves homebrew down leaves the server down too — `restart.js` brings both
-  back. Do not `:8091/install`-replace homebrew to fix a dead server; that's a
+  leaves homebrew down leaves the server down too — relaunching homebrew
+  (`launch.js`, as above) brings both back. Do not `:8091/install`-replace homebrew to fix a dead server; that's a
   sledgehammer that also drops the connection mid-swap.
 - **It has been wiped by TV self-updates.** If `GET /packages` no longer lists
   `S6K2WQ8MnP`, reinstall from `stremio/release/stremio-server.wgt`. The

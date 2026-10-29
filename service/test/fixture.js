@@ -27,7 +27,9 @@ const zipAll = (entries) => {
     const directory = [];
     let at = 0;
 
-    entries.forEach(({ name, contents, deflate = false }) => {
+    // `descriptors` writes the sizes after the data instead of in the local header, as streaming
+    // zip writers do, and leaves the local header's sizes at zero.
+    entries.forEach(({ name, contents, deflate = false, descriptors = false }) => {
         const filename = Buffer.from(name, 'utf8');
         const stored = deflate ? deflateRawSync(contents) : contents;
         const sum = crc32(contents);
@@ -35,17 +37,18 @@ const zipAll = (entries) => {
         const local = Buffer.alloc(30);
         local.writeUInt32LE(0x04034b50, 0);   // local file header
         local.writeUInt16LE(20, 4);           // version needed
-        local.writeUInt16LE(0, 6);            // flags
+        local.writeUInt16LE(descriptors ? 0x08 : 0, 6); // flags
         local.writeUInt16LE(deflate ? 8 : 0, 8);
-        local.writeUInt32LE(sum, 14);
-        local.writeUInt32LE(stored.length, 18);
-        local.writeUInt32LE(contents.length, 22);
+        local.writeUInt32LE(descriptors ? 0 : sum, 14);
+        local.writeUInt32LE(descriptors ? 0 : stored.length, 18);
+        local.writeUInt32LE(descriptors ? 0 : contents.length, 22);
         local.writeUInt16LE(filename.length, 26);
 
         const central = Buffer.alloc(46);
         central.writeUInt32LE(0x02014b50, 0); // central directory header
         central.writeUInt16LE(20, 4);         // version made by
         central.writeUInt16LE(20, 6);         // version needed
+        central.writeUInt16LE(descriptors ? 0x08 : 0, 8);
         central.writeUInt16LE(deflate ? 8 : 0, 10);
         central.writeUInt32LE(sum, 16);
         central.writeUInt32LE(stored.length, 20);
@@ -53,10 +56,18 @@ const zipAll = (entries) => {
         central.writeUInt16LE(filename.length, 28);
         central.writeUInt32LE(at, 42);        // where its local header is
 
-        bodies.push(local, filename, stored);
+        const descriptor = Buffer.alloc(descriptors ? 16 : 0);
+        if (descriptors) {
+            descriptor.writeUInt32LE(0x08074b50, 0);
+            descriptor.writeUInt32LE(sum, 4);
+            descriptor.writeUInt32LE(stored.length, 8);
+            descriptor.writeUInt32LE(contents.length, 12);
+        }
+
+        bodies.push(local, filename, stored, descriptor);
         directory.push(central, filename);
 
-        at += local.length + filename.length + stored.length;
+        at += local.length + filename.length + stored.length + descriptor.length;
     });
 
     const central = Buffer.concat(directory);
