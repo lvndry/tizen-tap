@@ -2,11 +2,20 @@
 
 **A Samsung TV that installs, updates, and repairs its own apps.**
 
-tizen-tap runs a small service on the TV that re-signs and installs Tizen
-packages over the TV's own loopback, keeps them alive, and shows what it's
-doing on the screen. Everything is also exposed as a plain JSON API on your
-LAN, behind a 6-digit PIN — so a person, a script, or an AI agent can drive
-the same TV the same way.
+A Samsung TV only runs apps from Samsung's store. Installing anything else
+normally means a computer with Tizen Studio, a developer certificate, and a
+package signed for that one TV, repeated for every app and every update.
+
+tizen-tap moves all of that onto the TV. After a one-time setup, you
+install apps that aren't in the store, like a community YouTube client or a
+Stremio server, from the TV itself or from your phone, with no computer
+involved. It also keeps those apps running, updates them, and gives you
+root on the TV.
+
+Under the hood it's a small service on the TV that re-signs packages and
+installs them over the TV's own loopback. The same service answers a JSON
+API on your LAN behind a 6-digit PIN, so scripts and agents can drive it
+too.
 
 <sub>Tested on a Samsung CU7105 (Tizen 6.5, 2023). Most of it applies to any
 modern Samsung smart TV with Developer Mode.</sub>
@@ -15,28 +24,25 @@ modern Samsung smart TV with Developer Mode.</sub>
 
 ## Features
 
-- **Install anything** — a curated catalog, a GitHub release, a `.wgt`
-  from your phone, a USB stick, or any direct URL. Re-signed for your TV in
-  ~150 ms, no store, no review.
-- **Keeps apps alive** — installed services are watched and relaunched, the
-  root channel re-arms itself after power cycles, and `GET /dev/status`
-  tells you when something didn't come back.
-- **Self-updating** — tizen-tap is in its own catalog, so it updates itself
-  the same way, including in-place self-updates that don't kill the service
-  doing the installing.
-- **Diagnosis in one call** — `GET /dev/status` aggregates the whole stack
-  (Developer Mode, sdbd, root channel, services, memory, OOM history, boot
-  type) and returns a computed `diagnosis` in plain English: the most
-  likely problem and the one action that fixes it.
-- **Root on the TV** (see [Root](#root)) — commands as uid 0 over a
-  loopback channel, for the parts the app sandbox can't touch.
-- **Ships a Stremio server** — [stremio/](stremio/) is Stremio's streaming
-  server as a Tizen service, so the TV streams its own torrents with no
-  computer on the network.
+- Installs from a curated catalog, a GitHub release, a `.wgt` uploaded from
+  your phone, a USB stick, or a direct URL. Each package is re-signed for
+  your TV in about 150 ms.
+- Watches installed services and relaunches them. The root channel re-arms
+  after every power cycle, and Stremio and Bonsoir are revived on a 60 s
+  sweep.
+- Updates itself from its own catalog entry, in place, without killing the
+  service that runs the install.
+- `GET /dev/status` reports Developer Mode, sdbd, the root channel,
+  services, memory, OOM history and boot type, plus a `diagnosis` field: one
+  sentence naming the likely problem and the fix.
+- Gives you root access on the TV, for everything the app sandbox can't
+  reach. See [Root](#root).
+- Ships Stremio's streaming server as a Tizen service ([stremio/](stremio/)),
+  so the TV can stream torrents without a computer on the network.
 
 ## Install
 
-One command; it carries its own runtime, nothing to install first.
+The installer carries its own runtime.
 
 ### Linux / macOS
 ```sh
@@ -48,25 +54,23 @@ curl -fsSL https://lvndry.github.io/tizen-tap/install.sh | sh
 irm https://lvndry.github.io/tizen-tap/install.ps1 | iex
 ```
 
-The installer finds the TV, mints a Samsung certificate for your own
-account, installs the app, and tells you what to switch. Ten minutes, most
-of it the TV restarting.
+It finds the TV, mints a Samsung certificate for your account, installs
+tizen-tap on the TV, and tells you which settings to change. Expect about ten minutes, mostly TV
+restarts.
 
-**Two steps are yours.** `sdb` runs a command allowlist, so no software can
-do them. Both are on the TV: **Apps → hold Enter (or type 12345) →
-Settings → Developer mode** — and both need a TV restart, since the value
-is only read at startup:
+Two settings have to be changed by hand, because `sdb` only accepts an
+allowlist of commands. Both are under **Apps → hold Enter (or type 12345) →
+Settings → Developer mode**, and each needs a TV restart to take effect:
 
 | When | Set **Host PC IP** to |
 | --- | --- |
-| Before installing | this computer's address — the installer prints it |
+| Before installing | this computer's address (the installer prints it) |
 | After installing | `127.0.0.1` |
 
-The second is the whole trick: after it, the TV installs its own apps over
-its own loopback, and no other machine on your network can reach its sdb
-daemon anymore.
+After the second change, the TV installs apps over its own loopback and no
+other machine on the network can reach its sdb daemon.
 
-**From a checkout** (Node 20+):
+From a checkout (Node 20+):
 
 ```sh
 git clone https://github.com/lvndry/tizen-tap.git
@@ -79,71 +83,82 @@ npm run full-bootstrap          # or: -- <tv-ip>, if you know it
 
 | Tab | |
 | --- | --- |
-| **Apps** | The catalog — install, check for updates, one press |
+| **Apps** | The catalog: install and check for updates |
 | **Upload** | A `.wgt` from the phone |
-| **GitHub** | `owner/repo` — takes the newest release |
+| **GitHub** | `owner/repo`, installs the newest release |
 | **URL** | A direct https link |
 | **USB** | A stick plugged into the TV |
 | **Shell** | sdb commands, off by default |
 
-The PIN is minted once on first start and kept forever, so paired phones
-stay paired; the TV screen always shows the current one.
+The PIN is created on first start and never changes, so paired phones stay
+paired. The TV screen always shows it.
 
-**Agents** get the same TV through
-[AGENTS.md](AGENTS.md) — a complete operational contract: every endpoint,
-every command, and the honest failure modes (what a refused port means,
-why silence is often success, when to stop). The on-screen log is the human
-view of the same records `GET /logs?since=<seq>` serves as JSON.
+For scripts and agents, [AGENTS.md](AGENTS.md) lists every endpoint and
+command, and what each failure looks like. The on-screen log shows the
+same records that `GET /logs?since=<seq>` returns as JSON.
 
-**Companions.** [stremio/](stremio/) is the TV's own streaming server —
-five minute setup in [stremio/README.md](stremio/README.md). The
-[samsung-tv-toolbox](https://github.com/lvndry/samsung-tv-toolbox) is the
-plain-Node side on your machine: pairing, remote keys over the network,
-Wake-on-LAN, Developer Mode setup, sdb from your laptop. No install needed.
+Related: [stremio/README.md](stremio/README.md) sets up the TV's streaming
+server in about five minutes. [samsung-tv-toolbox](https://github.com/lvndry/samsung-tv-toolbox)
+holds the Node scripts you run on your own machine: pairing, remote keys,
+Wake-on-LAN, Developer Mode setup, and sdb from a laptop.
+
+### What to install
+
+Apps that publish `.wgt` builds on GitHub:
+
+| App | Repo | How |
+| --- | --- | --- |
+| YouTube | [SushyDev/tizen-youtube](https://github.com/SushyDev/tizen-youtube) | **Apps** tab, it's in the catalog |
+| TizenBrew | [reisxd/TizenBrew](https://github.com/reisxd/TizenBrew) | **GitHub** tab: `reisxd/TizenBrew`. Runs modules like [TizenTube](https://github.com/reisxd/TizenTube) (ad-free YouTube, SponsorBlock) |
+| Jellyfin | [jeppevinkel/jellyfin-tizen-builds](https://github.com/jeppevinkel/jellyfin-tizen-builds) | **URL** tab: `https://github.com/jeppevinkel/jellyfin-tizen-builds/releases/latest/download/Jellyfin.wgt` |
+| Moonlight | [brightcraft/moonlight-tizen](https://github.com/brightcraft/moonlight-tizen) | **URL** tab: `https://github.com/brightcraft/moonlight-tizen/releases/latest/download/Moonlight.wgt` |
+| Stremio server | [stremio/](stremio/) in this repo | see [stremio/README.md](stremio/README.md) |
+
+Jellyfin and Moonlight publish several `.wgt` variants per release, and the
+**GitHub** tab installs the first one it finds, so use the direct URL to
+get the standard build.
 
 ## Root
 
-The service can run commands as **uid 0** on the TV — inspect the kernel,
-protect services from the OOM killer, write the settings database, read
-the firmware. [docs/root.md](docs/root.md) covers what it unlocks and how
-to use it; [docs/sdbd-and-root.md](docs/sdbd-and-root.md) is the
-reverse-engineering notes behind it. That root is **board-
-and firmware-specific** — cracked on a 2023 Tizen 6.5 board (KSU2E /
-CU7105), so verify before you assume.
+tizen-tap gets root on the TV. With it you can inspect the kernel,
+protect services from the OOM killer, write the settings database, and read
+the firmware. [docs/root.md](docs/root.md) explains how to use it, and
+[docs/sdbd-and-root.md](docs/sdbd-and-root.md) has the reverse-engineering
+notes.
 
-It also self-heals on its own: the root channel re-arms after every power
-cycle, the service revives Stremio and Bonsoir on a 60 s sweep, and
-`GET /dev/status` names whatever didn't come back.
+The exploit is **board- and firmware-specific**. It was found on a 2023
+Tizen 6.5 board (KSU2E / CU7105); check that it works on yours before
+relying on it.
 
 ## How it works
 
-**Re-signing.** A Tizen package names the device it may install on, in its
-distributor certificate:
+**Re-signing.** A Tizen package's distributor certificate names the device
+it may install on:
 
 ```
 URI:URN:tizen:deviceid=CPCLIM2YRW7DO
 ```
 
-From Tizen 7 the TV enforces it, so a `.wgt` installs on its builder's set
-and nowhere else. The TV gets its own certificate pair during setup and
-re-signs everything it installs, in ~150 ms. That's also why "signed"
-costs nothing here: the signature is a free developer certificate bound to
-your own TV, not a store approval.
+From Tizen 7 the TV enforces this, so a `.wgt` only installs on the set it
+was built for. During setup the TV gets its own certificate pair and
+re-signs every package before installing it. The certificate is a free
+Samsung developer certificate bound to your TV, not a store approval.
 
-**Always on.** `config.xml` declares the service `on-boot` and
-`auto-restart`. On this firmware the platform only relaunches a service
-that died *abnormally*, so `POST /restart` restarts by throwing — a clean
-exit stays down.
+**Staying up.** `config.xml` declares the service `on-boot` and
+`auto-restart`. This firmware only relaunches a service that exited
+abnormally, so `POST /restart` throws on purpose. A clean exit would stay
+down.
 
-**Security.** The install endpoint is open to the network by design, gated
-by the 6-digit PIN: minted on first run, readable only over loopback so a
-person has to relay it. Five wrong guesses locks pairing for five minutes.
-The sdb relay is off by default, takes a second opt-in to survive reboots,
-and refuses commands that would disable it or uninstall the app.
+**Security.** The install endpoint is reachable from the network and gated
+by the PIN. The PIN can only be read over loopback, so a person has to
+relay it. Five wrong guesses lock pairing for five minutes. The sdb relay
+is off by default, needs a second opt-in to survive reboots, and refuses
+commands that would disable it or uninstall the app.
 
-**The log.** sdbd's allowlist excludes every log tool, so the app carries
-its own. **show logs** on the TV; up/down a line, left/right a page, RED
-for newest. `GET /logs?since=<seq>` returns the same records as JSON.
+**The log.** sdbd's allowlist blocks every log tool, so the app keeps its
+own. Open **show logs** on the TV: up/down moves a line, left/right a
+page, RED jumps to the newest entry. `GET /logs?since=<seq>` returns the
+same records as JSON.
 
 ## Working on it
 
@@ -153,16 +168,16 @@ npm run dev:service  # the service off-TV, on :8091
 npm test             # lint, typecheck, protocol, PIN gate, install pipeline
 ```
 
-The installer is a separate program in [`installer/`](installer/),
-compiled to one binary per platform; it calls `tools/` and `service/`
-directly so the sdb client and the re-signer have one implementation each.
+The installer lives in [`installer/`](installer/) and compiles to one
+binary per platform. It calls into `tools/` and `service/`, so the sdb
+client and the re-signer each have a single implementation.
 
 ---
 
 Thanks to [SushyDev/tizen-homebrew](https://github.com/SushyDev/tizen-homebrew)
-for inspiring this, and to the people behind the Homebrew Channel, TizenBrew
-and TizenTube — the credits screen lists the rest — who worked out what a
-Samsung TV will and will not allow. Licensed GPL-3.0-only.
+for the inspiration, and to the people behind the Homebrew Channel,
+TizenBrew and TizenTube (the credits screen lists the rest), who worked out
+what a Samsung TV will and won't allow. Licensed GPL-3.0-only.
 
 **Not affiliated with Samsung.** This project is not created, sponsored, or
 endorsed by Samsung Electronics. Samsung, Tizen, sdb and related names are
