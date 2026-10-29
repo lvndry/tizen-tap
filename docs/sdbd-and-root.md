@@ -3,6 +3,18 @@
 Reverse-engineering notes for the CU7105 (Tizen 6.5, board KSU2E), compiled
 October 2024. Everything here was verified on a live unit, not assumed.
 
+## Expect board and firmware dependence
+
+This is not a universal Tizen root. The chain — sdbd gate, the signed agent
+launched under `sdbd-tarlauncher`, the `buxton2` settings DB, UEP behaviour
+— was cracked on a **2023 Tizen 6.5 board (KSU2E / CU7105)**. Other boards
+and newer firmwares may not offer the same entry points; Tizen 7+ in
+particular enforces per-device install URNs and ships a rewritten sdbd.
+Developer Mode must be enabled, and the sdbd developer-host gate must point
+at the host doing the arming. Treat "it works on your TV" as something to
+verify, not to assume — `GET /dev/status` shows the handshake failing
+before anything else does.
+
 ## The developer IP is a settings-DB key, not a file
 
 sdbd reads its developer host at boot from the `buxton2` settings database

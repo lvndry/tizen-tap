@@ -133,7 +133,10 @@ Developer Mode setup, sdb from your laptop. No install needed.
 
 With the [companion root setup](docs/sdbd-and-root.md), the service reaches
 the TV's sdb daemon and runs commands as **uid 0** over a loopback channel —
-the only path to the parts of the TV the app sandbox can't touch.
+the only path to the parts of the TV the app sandbox can't touch. That root
+is **board- and firmware-specific**: the exploit chain was cracked on a 2023
+Tizen 6.5 board (KSU2E / CU7105) and needs Developer Mode, so a different
+board or a newer firmware may not offer the same entry points.
 
 What self-heals on its own, zero involvement:
 
