@@ -13,6 +13,11 @@ const { parseBuxton2, noteDeveloperIp } = require('../routes/status.ts');
 const DEVELOPER_IP_KEY = 'db/sdk/develop/ip';
 const READ_COMMAND = `buxton2ctl get system ${DEVELOPER_IP_KEY}`;
 const RESTART_COMMAND = 'systemctl restart sdbd';
+// The self-heal runs inside a live root session: a synchronous restart would
+// kill the very agent executing it before the exec can answer. Detached, the
+// exec returns first, sdbd drops the channel on its way out, and the re-arm
+// that follows finds a clean, freshly-started daemon.
+const HEAL_RESTART_COMMAND = 'setsid sh -c "sleep 2; systemctl restart sdbd" >/dev/null 2>&1 &'
 const SELF_INSTALL_IP = '127.0.0.1';
 const RESTART_TIMEOUT_MS = 15000;
 
@@ -52,17 +57,14 @@ async function ensureLoopbackGate({ exec, log }) {
         if (after !== SELF_INSTALL_IP) throw new Error(`wrote ${SELF_INSTALL_IP} but read back ${after}`);
 
         noteDeveloperIp(after);
-        log(`loopback gate: self-healed ${current} -> ${SELF_INSTALL_IP}; restarting sdbd (the root channel will likely drop)`);
-    } catch (error) {
-        log(`loopback gate: self-heal to ${SELF_INSTALL_IP} failed (${error.message}); left at ${current}`);
-        return { changed: false, reason: error.message };
-    }
+        log(`loopback gate: self-healed ${current} -> ${SELF_INSTALL_IP}; restarting sdbd in the background (the root channel will drop)`);
 
-    try {
-        const restart = await exec(RESTART_COMMAND, RESTART_TIMEOUT_MS);
-        log(`loopback gate: systemctl restart sdbd exited ${restart.exit}${restart.stderr ? `: ${restart.stderr.trim()}` : ''}`);
+        await exec(HEAL_RESTART_COMMAND, 5000);
     } catch (error) {
-        log(`loopback gate: sdbd restart took the root channel with it (${error.message}), as expected`);
+        // The value may already be written even when this throws — a failed
+        // dispatch just means sdbd keeps the old gate until its next restart.
+        log(`loopback gate: self-heal to ${SELF_INSTALL_IP} failed (${error.message}); the gate may already be set`);
+        return { changed: false, reason: error.message };
     }
 
     return { changed: true, before: current, after: SELF_INSTALL_IP };
@@ -133,5 +135,5 @@ async function changeDeveloperIp({ exec, ip, respond, log }) {
 
 module.exports = {
         isDottedQuad, readDeveloperIp, changeDeveloperIp, ensureLoopbackGate,
-    READ_COMMAND, RESTART_COMMAND, SELF_INSTALL_IP, NOT_SELF_INSTALL_WARNING
+        READ_COMMAND, RESTART_COMMAND, HEAL_RESTART_COMMAND, SELF_INSTALL_IP, NOT_SELF_INSTALL_WARNING
 };
