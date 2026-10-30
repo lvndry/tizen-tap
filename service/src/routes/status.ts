@@ -22,7 +22,7 @@
 const { json, failure, denied } = require('../http/respond.ts');
 const { ErrorCode } = require('../protocol.ts');
 const { recentLaunches } = require('../launches.ts');
-const { describeRescue, RESCUE_APP_ID } = require('../rescue/lastgood.ts');
+const { describeRescue, RESCUE_APP_ID, RESCUE_PORT, lanIpv4 } = require('../rescue/lastgood.ts');
 
 const SDBD_PORT = 26101;
 const STREMIO_PORT = 11470;
@@ -240,6 +240,7 @@ async function buildStatus(probes) {
     const portPromise = probes.portProbe(SDBD_PORT, PORT_PROBE_MS);
     const stremioPromise = probes.stremio();
     const meminfoPromise = Promise.resolve(probes.meminfo()).catch(() => null);
+    const rescuePromise = probes.rescue ? Promise.resolve(probes.rescue()).catch(() => null) : null;
 
     let developer: { mode: boolean | null, ip: string | null, source: 'root-read' | 'last-known' | 'unknown' } = { mode: null, ip: null, source: 'unknown' };
 
@@ -298,7 +299,7 @@ async function buildStatus(probes) {
         oom,
         launches: probes.launches(),
         previousRun: probes.previousRun ? probes.previousRun() : null,
-        rescue: probes.rescue ? probes.rescue() : null,
+        rescue: rescuePromise ? await rescuePromise : null,
         boot: {
             uptime_s: typeof uptime === 'number' ? Math.round(uptime) : null,
             // This firmware's power button is deep sleep, so a fresh /proc/uptime is the only
@@ -413,8 +414,22 @@ function realStremio(host, port) {
 }
 
 
-function realRescue(onTv) {
+// Whether the rescue's own installer answers GET /health on the LAN address:
+// its loopback is not this app's.
+function rescuePortAnswers(host, port = RESCUE_PORT, timeoutMs = PORT_PROBE_MS): Promise<boolean> {
+    return new Promise((resolve) => {
+        const request = require('http').get({ host, port, path: '/health', timeout: timeoutMs }, (response) => {
+            response.resume();
+            resolve(response.statusCode === 200);
+        });
+        request.on('timeout', () => { request.destroy(); resolve(false); });
+        request.on('error', () => resolve(false));
+    });
+}
+
+async function realRescue(onTv) {
     let installed: boolean | null = null;
+    let listening: boolean | null = null;
 
     if (onTv) {
         try {
@@ -422,9 +437,12 @@ function realRescue(onTv) {
         } catch (e) {
             installed = false;
         }
+
+        const host = lanIpv4();
+        listening = host ? await rescuePortAnswers(host) : null;
     }
 
-    return describeRescue({ fs: require('fs'), installed });
+    return { ...describeRescue({ fs: require('fs'), installed }), port: RESCUE_PORT, listening };
 }
 
 function realUptimeSeconds() {
@@ -587,5 +605,5 @@ function register(ctx, router) {
 
 module.exports = {
     register, buildStatus, diagnose, parseBuxton2, noteArmError, noteDeveloperIp, realScanProc, realStremio, stremioLanHost,
-    parseMeminfo, parseOomKills, OOM_DMESG_COMMAND, STREMIO_PKG_IDS, SDBD_PIDOF_COMMAND, MSG_RESCUE_MISSING, MSG_NO_LAST_GOOD
+    parseMeminfo, parseOomKills, OOM_DMESG_COMMAND, STREMIO_PKG_IDS, SDBD_PIDOF_COMMAND, MSG_RESCUE_MISSING, MSG_NO_LAST_GOOD, rescuePortAnswers
 };

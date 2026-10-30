@@ -8,10 +8,12 @@
 // installed through Tizen Tap, it is re-signed for the TV on the way in.
 
 const { execFileSync } = require('child_process');
-const { existsSync, mkdirSync, rmSync, cpSync, writeFileSync } = require('fs');
+const { existsSync, mkdirSync, rmSync, cpSync, writeFileSync, readFileSync } = require('fs');
 const { join } = require('path');
 
 const { rolldown } = require('rolldown');
+
+const { injectTokens } = require('../tools/inject.js');
 
 const ROOT = join(__dirname, '..');
 const STAGE = join(ROOT, '.package-rescue');
@@ -20,10 +22,23 @@ const OUT = join(ROOT, 'release', 'rescue.wgt');
 const TARGET = 'node12';
 const INCLUDE = ['config.xml', 'icon.png', 'index.html'];
 
-// The rescue carries an sdb client and an installer and nothing else.
-const CEILING = 80 * 1024;
+// An sdb client, an installer, the re-signer and a two-route server.
+const CEILING = 400 * 1024;
 
 const certificates = require(join(ROOT, 'tools', 'certificates.js'));
+
+function buildStamp() {
+    const version = (/<widget\b[^>]*\bversion="([^"]+)"/.exec(readFileSync(join(__dirname, 'config.xml'), 'utf8')) || [])[1] || '0.0.0';
+    const sha = (() => {
+        try {
+            return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
+        } catch (e) {
+            return 'nogit';
+        }
+    })();
+
+    return `${version}+${sha}.${new Date().toISOString().replace(/[-:]/g, '').slice(0, 13)}`;
+}
 
 async function bundle() {
     const built = await rolldown({
@@ -32,15 +47,16 @@ async function bundle() {
         transform: { target: TARGET }
     });
 
-    const { output } = await built.generate({ format: 'cjs' });
+    const { output } = await built.generate({ format: 'cjs', minify: true });
     const entry = output.find((chunk) => chunk.type === 'chunk' && chunk.isEntry);
+    const { code } = injectTokens(entry.code, { __RESCUE_BUILD__: buildStamp() });
 
-    if (!/onStart/.test(entry.code)) throw new Error('the rescue bundle does not export onStart');
+    if (!/onStart/.test(code)) throw new Error('the rescue bundle does not export onStart');
 
-    const bytes = Buffer.byteLength(entry.code);
+    const bytes = Buffer.byteLength(code);
     if (bytes > CEILING) throw new Error(`the rescue bundle is ${bytes} bytes, over the ${CEILING} ceiling`);
 
-    return entry.code;
+    return code;
 }
 
 async function main() {

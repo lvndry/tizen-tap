@@ -176,6 +176,31 @@ If the log says `no last-good copy` or `giving up`, the copy cannot help:
 reinstall from a computer (README, Install). That install leaves a fresh
 staged package, which becomes the next last-good copy.
 
+## Tizen Tap is broken and won't start: install through the rescue on :8093
+
+When Tizen Tap is installed but will not start, or a build is broken in a
+way a reinstall of the last-good copy will not fix, push a working build
+straight through the rescue. Developer Mode and Host PC IP stay as they
+are, and nothing needs a reboot.
+
+```sh
+curl http://<tv-ip>:8093/health
+# {"ok":true,"rescue":"1.0.0+...","tizenTap":{"installed":true,"answering":false}}
+
+npm run package -- --sign
+npm run install-app -- <tv-ip> release/homebrew.wgt --pin <pin> --rescue
+```
+
+The rescue identifies the package from its `config.xml`, re-signs it with
+the pair Tizen Tap stored (or installs it as sent, which then must be
+signed for this TV), stages it, runs `vd_appinstall` over loopback sdb and
+launches it. The answer lists every phase, and a refusal quotes the
+installer's own line. One install runs at a time: a second one, or one that
+arrives while the boot check is reinstalling, gets 409 with `Retry-After`.
+The PIN rules are in the README (Install, step 8). If `:8093` does not
+answer either, the rescue is not installed or not running: `node app.js
+kiB8Pr8Nds.Rescue` starts it.
+
 ## The service reloads every 3 seconds (fixed in #6)
 
 Found on the CU7105 on 2026-10-30, running build `0.2.2+edb0be3`.
