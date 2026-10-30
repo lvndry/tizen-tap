@@ -30,7 +30,7 @@ const IDENTITY = {
 };
 
 const base = {
-    connection: 'connected', paired: true, pin: '', pinError: null, restoring: false, themeOn: true,
+    connection: 'connected', paired: true, pin: '', pinError: null, restoring: false,
     device: { onTv: true, ready: true, platformVersion: '6.5' },
     catalog: [
         { id: 'homebrew', name: 'Tizen Tap', version: '0.2.0', installed: '0.1.0', available: '0.2.0', checked: true, update: true, description: 'This app. Updates itself.', icon: HOMEBREW, source: { type: 'github', ref: 'lvndry/tizen-tap' } },
@@ -99,7 +99,6 @@ const televisionState = {
     build: '20260828-1',
     view: 'main',
     from: 0,
-    themeOn: true,
     lines: [
         [312, 'svc', 'ok', 'startup finished in 312ms'],
         [318, 'dev', 'info', 'tizen 6.5'],

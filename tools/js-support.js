@@ -90,4 +90,4 @@ const scriptsOf = (html) => (html.match(/<script\b[^>]*>([\s\S]*?)<\/script>/g) 
     .map((tag) => tag.replace(/^<script\b[^>]*>/, '').replace(/<\/script>$/, ''))
     .filter((body) => body.trim());
 
-module.exports = { unsupportedJs, scriptsOf, patternProblems, expressionsIn, FEATURES };
+module.exports = { unsupportedJs, scriptsOf };

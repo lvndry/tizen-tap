@@ -17,7 +17,7 @@ import minting from "../../tools/minting.js";
 import installing from "../../tools/installing.js";
 import certificates from "../../tools/certificates.js";
 import tv from "../../tools/tv.js";
-import resigner from "../../service/src/install/resign.js";
+import resigner from "../../service/src/install/resign.ts";
 
 const { duidOf } = tv;
 const { resign } = resigner;

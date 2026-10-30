@@ -22,7 +22,7 @@ const Outbound = {
     STATE: 'state',                 // DeviceState
     LOG: 'log',                     // { lines: [LogLine], uptime }
     CATALOG: 'catalog',             // { entries: [CatalogEntry], stale, source }
-    PROGRESS: 'progress',           // { phase, detail?, identity? }
+    PROGRESS: 'progress',           // { phase: probing|fetching|resigning|staging|installing, detail?, identity? }
     DONE: 'done',                   // { packageId, appId }
     ERROR: 'error',                 // { code, message, remedy?, fatal }
     DIR: 'dir',                     // [{ name, path, isDirectory, size?, identity? }]
@@ -30,14 +30,6 @@ const Outbound = {
     RELAY_STATE: 'relayState',      // { enabled }
     RELAY_DATA: 'relayData',        // { id, chunk }
     RELAY_END: 'relayEnd'           // { id, output, truncated? }
-};
-
-const Phase = {
-    PROBING: 'probing',
-    FETCHING: 'fetching',
-    RESIGNING: 'resigning',
-    STAGING: 'staging',
-    INSTALLING: 'installing'
 };
 
 // Stable identifiers the UI maps to translated strings; every code the service throws belongs here.
@@ -143,7 +135,6 @@ function encode(type, payload) {
 module.exports = {
     Inbound,
     Outbound,
-    Phase,
     ErrorCode,
     ProtocolError,
     parse,

@@ -122,4 +122,4 @@ Relay.prototype.exec = function (id, command, options) {
     return run;
 };
 
-module.exports = { Relay, isSelfDestructive, MAX_OUTPUT, MAX_CONCURRENT, DEFAULT_TIMEOUT, MAX_TIMEOUT };
+module.exports = { Relay, isSelfDestructive, MAX_CONCURRENT };

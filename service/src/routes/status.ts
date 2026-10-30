@@ -31,8 +31,10 @@ const ROOT_EXEC_MS = 10000;
 const COLD_BOOT_MAX_S = 180;
 const DEVELOPER_COMMAND = 'buxton2ctl get system db/sdk/develop/ip; buxton2ctl get system db/sdk/develop/mode';
 
-// sdbd runs in the system domain, which the app's /proc view does not cover.
-const SDBD_PIDOF_COMMAND = 'pidof sdbd >/dev/null 2>&1 && echo yes || echo no';
+// sdbd runs in the system domain, which the app's /proc view does not cover. A firmware without
+// pidof answers unknown rather than no.
+const SDBD_PIDOF_COMMAND = 'if pidof sdbd >/dev/null 2>&1; then echo yes; ' +
+    'elif command -v pidof >/dev/null 2>&1; then echo no; else echo unknown; fi';
 
 // The kernel's kill log: the OOM killer's reaping lines are the only record
 // of a service dying of memory pressure, and dmesg is the one place on this
@@ -315,8 +317,9 @@ function realPortProbe(port, timeoutMs) {
 
 // sdbd is the daemon that owns 26101; its comm line is the process check.
 // Two tiers: the app's sandbox (uid 901) can read most /proc/<pid>/comm files
-// but not sdbd's — it lives in the system domain — so when a root channel is
-// connected the probe also asks root with pidof and ORs the two answers.
+// but not sdbd's (it lives in the system domain), so when a root channel is
+// connected the probe also asks root with pidof. The sandbox not seeing sdbd
+// is not sdbd being gone: without an answer from root the result is null.
 function realScanProc(rootExec) {
     const fs = require('fs');
     let found = false;
@@ -334,27 +337,25 @@ function realScanProc(rootExec) {
         }
     } catch (e) {}
 
-    if (found || !rootExec) return Promise.resolve(found);
+    if (found) return Promise.resolve(true);
+    if (!rootExec) return Promise.resolve(null);
 
     return rootExec(SDBD_PIDOF_COMMAND)
-        .then((output) => /yes/.test(output))
-        .catch(() => false);
+        .then((output) => {
+            const answer = String(output).trim().split('\n')[0];
+            return answer === 'yes' ? true : answer === 'no' ? false : null;
+        })
+        .catch(() => null);
 }
 
-// One connect through the service's own sdb client, so the classification
-// rides the same codes every other part of the service already understands:
-// refused is a closed door, anything that dies mid-handshake is a rejection.
+// Through the service's own sdb client, which knows whether it already holds
+// sdbd's one session (proof enough) and retries a stray drop: rejected means
+// every attempt died mid-handshake, refused means nothing is listening.
 function realHandshake() {
-    const { connect } = require('../tv/sdb.ts');
+    const { probeHandshake } = require('../tv/sdb.ts');
 
-    return new Promise((resolve) => {
-        connect({ host: '127.0.0.1', port: SDBD_PORT, attempts: 1, timeout: PORT_PROBE_MS })
-            .then((session) => { session.close(); resolve('ok'); })
-            .catch((error) => {
-                const code = error && error.code;
-                resolve(code === 'sdbRefused' || code === 'ECONNREFUSED' ? 'refused' : 'rejected');
-            });
-    });
+    return probeHandshake({ host: '127.0.0.1', port: SDBD_PORT, timeout: PORT_PROBE_MS })
+        .then((probe) => probe.handshake, () => 'untested');
 }
 
 // Tizen gives every app its own network sandbox: the Stremio server's
@@ -559,5 +560,5 @@ function register(ctx, router) {
 
 module.exports = {
     register, buildStatus, diagnose, parseBuxton2, noteArmError, noteDeveloperIp, realScanProc, realStremio, stremioLanHost,
-    parseMeminfo, parseOomKills, realMeminfo, OOM_DMESG_COMMAND, STREMIO_PKG_IDS
+    parseMeminfo, parseOomKills, OOM_DMESG_COMMAND, STREMIO_PKG_IDS, SDBD_PIDOF_COMMAND
 };

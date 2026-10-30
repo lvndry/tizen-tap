@@ -4,7 +4,6 @@ import { createStore } from './core/store.ts';
 import { mount, delegate } from './core/view.ts';
 import { remote, KEY } from './core/remote.ts';
 import { connect as openSocket } from './core/socket.ts';
-import { theme } from './scene/theme.ts';
 import { masthead, connect, status, log, overlay, deck, windowOf } from './views/television.ts';
 
 const PORT = 8091;
@@ -27,7 +26,6 @@ const store = createStore({
     view: 'main',
     from: 0,
     rows: null,
-    themeOn: false,
     restarting: false
 });
 
@@ -83,15 +81,9 @@ function say(text, level = 'info') {
 
 window.onerror = (message, _source, line) => say(`page error: ${message} (line ${line})`, 'err');
 
-// The television is silent until someone turns the theme on; a person's own choice overrides it.
-const channel = theme({
-    defaultOn: false,
-    onState: ({ playing }) => store.update({ themeOn: playing })
-});
-
-// The one thing left on HTTP: a single shot with no answer worth waiting for. Everything this page
-// used to ask for repeatedly now arrives over the socket instead. The PIN comes from the service's
-// own greeting, which it gives to loopback callers.
+// The one thing on HTTP: a single shot with no answer worth waiting for. Everything else this page
+// needs arrives over the socket. The PIN comes from the service's own greeting, which it gives to
+// loopback callers.
 function post(path) {
     return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
@@ -111,33 +103,36 @@ function post(path) {
 });
 }
 
-// The launch-param page leaves itself: the greeting proves the service is up, the timer gives the
-// socket a second to deliver it before the page goes. A backgrounding failure is not worth holding
-// the set on for — the old behaviour (stay put) is the fallback.
-// The Control API cannot say why the app was opened — it has no launch
-// parameters in the web runtime — so the page decides for itself: once the
-// greeting proves the service is up, the page has done its only job and hides.
-// A hidden TV app pauses its JavaScript but keeps running, and pressing
-// 'homebrew' on the remote opens it again.
-// A key is the only signal that distinguishes a person from a nudge, so the
-// page waits one beat after the greeting and hides unless someone has already
-// reached for the remote in that time.
-let hasSelfHid = false;
+// The Control API cannot say why the app was opened (the web runtime has no launch parameters), so the
+// page decides for itself: once the greeting proves the service is up, a page nobody has reached for
+// within one beat has done its only job and exits. A hidden page would keep a whole web runtime resident
+// (110 MB on a CU7105) with its JavaScript paused, doing nothing an exited one does not.
+// Nothing in the service needs this page: it is its own application, kept up by config.xml's on-boot and
+// auto-restart; the socket only feeds this screen; the pairing code is minted and kept by the service; and
+// this page's relaunch watchdog never ran while hidden. Pressing 'homebrew' on the remote opens it again.
+let hasSelfExited = false;
 let touched = false;
 
-function selfHide() {
-    if (hasSelfHid) return;
-    hasSelfHid = true;
+function selfExit() {
+    if (hasSelfExited) return;
+    hasSelfExited = true;
 
     setTimeout(() => {
         if (!store.get().pin || leaving || touched) return;
 
-        say('service is up — going to the background', 'info');
+        say('service is up, nobody is watching: closing this screen', 'info');
 
         try {
-            application.hide();
-        } catch (e) {
-            say(`backgrounding failed: ${e.message || e}`, 'warn');
+            leave();
+        } catch (exitError) {
+            leaving = false;
+            say(`exit failed: ${exitError.message || exitError}; going to the background instead`, 'warn');
+
+            try {
+                application.hide();
+            } catch (hideError) {
+                say(`backgrounding failed: ${hideError.message || hideError}`, 'warn');
+            }
         }
     }, 4000);
 }
@@ -159,9 +154,7 @@ let leaving = false;
 
 // Only this page leaves. The service is a separate application that starts with the television and is
 // meant to outlive every visit to this screen — a phone can reach it with nobody in front of the set,
-// which is the whole point of config.xml's on-boot. The audio is torn down here rather than left to
-// the page going away, because a runtime that keeps the page alive keeps the theme playing over the
-// Tizen home screen.
+// which is the whole point of config.xml's on-boot.
 function leave() {
     if (leaving) return;
 
@@ -172,7 +165,6 @@ function leave() {
 
     leaving = true;
 
-    channel.stop();
     application.exit();
 }
 
@@ -213,7 +205,6 @@ function toEnd() {
 }
 
 const actions = {
-    theme: () => channel.toggle(),
     logs: () => open('logs'),
     credits: () => open('credits'),
     close: () => close(),
@@ -468,7 +459,7 @@ const link = openSocket({
     url: application ? `ws://127.0.0.1:${PORT}` : null,
     onStatus: (status: string) => {
         changed(status);
-        selfHide();
+        selfExit();
     },
 
     onMessage: (type, payload) => {

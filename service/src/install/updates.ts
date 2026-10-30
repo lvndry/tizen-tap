@@ -195,4 +195,4 @@ function createUpdates({ packages, log, config, latestRelease = sources.latestRe
     return { mark, check, prime, changed };
 }
 
-module.exports = { createUpdates, CACHE_TTL, AT_ONCE, INSTALLED_TTL };
+module.exports = { createUpdates, AT_ONCE };

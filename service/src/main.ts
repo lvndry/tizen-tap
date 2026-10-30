@@ -137,9 +137,9 @@ function reviveCompanions() {
         }
     }
 
-    // Same windows and labels as before, but through the watchdog's guarded
-    // check: a slow probe cannot stack a second launch, and the 60 s sweep
-    // keeps the server alive after this start is long over.
+    // The default windows, through the watchdog's guarded check: a slow
+    // probe cannot stack a second launch, and the 60 s sweep keeps the
+    // server alive after this start is long over.
     schedule((label) => watchdog.check(label));
 
     // Every start puts the dashboard back on the glass — standby resume
@@ -225,7 +225,22 @@ function start() {
         return (archive) => resign(archive, config.read());
     }
 
-    const installer = createInstaller({ sdb, device, config, resigner, store, log });
+    const channelManifest = rootArm.manifest();
+    // The token file is the base64 form of the key; the C# agent does
+    // Convert.FromBase64String on it, so the channel must use the decoded
+    // bytes or every frame fails to authenticate.
+    const channelSecret = require('fs')
+        .readFileSync(require('path').join(rootArm.VENDOR, 'root-agent.token'), 'utf8')
+        .trim();
+    const channel = new RootChannel({
+        host: channelManifest.callbackHost, port: channelManifest.callbackPort,
+        // A Buffer, not a string: createHmac would re-encode a string as utf8
+        // and corrupt any high bytes of the key.
+        secret: Buffer.from(channelSecret, 'base64'),
+        log: (line) => svc.info(line)
+    });
+
+    const installer = createInstaller({ sdb, device, config, resigner, store, log, rootChannel: channel });
 
     function announce(state, previous) {
         if (!previous) {
@@ -330,21 +345,6 @@ function start() {
         fromLoopback,
         authorise
     };
-
-    const channelManifest = rootArm.manifest();
-    // The token file is the base64 form of the key; the C# agent does
-    // Convert.FromBase64String on it, so the channel must use the decoded
-    // bytes or every frame fails to authenticate.
-    const channelSecret = require('fs')
-        .readFileSync(require('path').join(rootArm.VENDOR, 'root-agent.token'), 'utf8')
-        .trim();
-    const channel = new RootChannel({
-        host: channelManifest.callbackHost, port: channelManifest.callbackPort,
-        // A Buffer, not a string: createHmac would re-encode a string as utf8
-        // and corrupt any high bytes of the key.
-        secret: Buffer.from(channelSecret, 'base64'),
-        log: (line) => svc.info(line)
-    });
 
     const root = { channel, arming: false };
     ctx.root = root;

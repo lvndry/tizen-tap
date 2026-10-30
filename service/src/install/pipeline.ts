@@ -22,9 +22,22 @@ const SELF_PACKAGE_ID = 'GJBBYNLkgP';
 const QUIET = ['debug', 'info', 'ok', 'warn', 'err']
     .reduce((noop, level) => ({ ...noop, [level]: () => {} }), {});
 
-function createInstaller({ sdb, device, config, resigner, store, log }) {
+// How sdbd turns away a second client while it is serving the root agent's session. The command
+// never ran, so another route is safe to try.
+const HELD_BY_ANOTHER_SESSION = { sdbClosed: true, sdbReset: true };
+
+// sdbd takes a moment to notice its session's process is gone.
+const SDBD_SETTLE_MS = 1000;
+
+function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createInstaller({ sdb, device, config, resigner, store, log, rootChannel = null as any }) {
     const say = log ? log.on('pkg') : QUIET;
     const sdbSays = log ? log.on('sdb') : QUIET;
+
+    const rootHoldsSdbd = (code) => !!(HELD_BY_ANOTHER_SESSION[code] && rootChannel && rootChannel.status().root);
 
     async function install(request: any, report = (..._args: any[]) => {}) {
         if (store.select('installing')) {
@@ -56,7 +69,10 @@ function createInstaller({ sdb, device, config, resigner, store, log }) {
                   `, sdb ${state.ready ? 'reachable' : `unreachable — ${state.sdbDetail || state.sdbError || state.reason || 'unknown'}`}`
                 : 'no television here — running as a development harness');
 
-            if (state.onTv && !state.ready) {
+            if (state.onTv && !state.ready && rootHoldsSdbd(state.sdbError)) {
+                say.info('sdb is turning clients away while the root agent holds its session; ' +
+                    'the install will fall back to root if sdb still refuses');
+            } else if (state.onTv && !state.ready) {
                 // The remedy comes after the fault and only as the thing that would explain it.
                 throw refuse(
                     state.reason === 'debugModeOff' ? 'debugModeOff' : 'sdbUnreachable',
@@ -129,43 +145,108 @@ function createInstaller({ sdb, device, config, resigner, store, log }) {
             return { ...carried, stagedPath };
         };
 
+        const logLines = (line) => sdbSays.info(line);
+
+        const inPlaceOverSdb = (carried) => {
+            const { packageId } = carried.identity;
+
+            sdbSays.info(`shell:0 vd_appinstall ${packageId} ${carried.stagedPath} (in place)`);
+
+            return sdb.withSession({ log: logLines },
+                (session) => installer.run(session, carried.stagedPath, packageId));
+        };
+
+        // Two copies of the same package start the service twice, so a copy that
+        // survived an earlier failed install has to go before the new one lands.
+        const replaceOverSdb = (carried) => {
+            const { packageId } = carried.identity;
+            const uninstall = `shell:0 vd_appuninstall ${packageId}`;
+
+            sdbSays.info(uninstall);
+
+            return sdb.withSession({ log: logLines }, async (session) => {
+                const cleared = await session.exec(uninstall, { timeout: 30000 });
+                sdbSays.info(`old copy gone: ${String(cleared).trim() || '(clean)'}`);
+                return installer.run(session, carried.stagedPath, packageId);
+            });
+        };
+
+        // pkgcmd updates in place, so there is no uninstall step to mirror.
+        const overRoot = async (carried) => {
+            say.info(`root: ${installer.rootCommand(carried.stagedPath)}`);
+
+            const verdict = await installer.runAsRoot(rootChannel, carried.stagedPath, carried.identity.packageId);
+            const lines = verdict.output.trim().split('\n');
+
+            say.info(`pkgcmd: ${lines[lines.length - 1]}`);
+        };
+
+        // Replacing this package kills the service mid-install, which closes the root channel under
+        // pkgcmd, and nothing guarantees pkgcmd outlives the agent it runs under: a half-written
+        // install of the service itself is the one failure nobody can repair over the network. sdb
+        // carries it instead, once the agent has given its session back; the new build re-arms root.
+        const selfUpdateOverSdb = async (carried, refusal) => {
+            if (rootChannel.busy) {
+                throw refuse('sdbUnreachable',
+                    'sdb is turning clients away while the root agent holds its session ' +
+                    `(${refusal.code}), and a root command is still running. A self-update cannot go ` +
+                    'through root, because replacing the service closes the root channel mid-install. ' +
+                    'Retry once the root channel is idle.');
+            }
+
+            say.warn('releasing the root agent so sdb can carry the self-update; the new build re-arms root');
+            await rootChannel.release();
+            await wait(SDBD_SETTLE_MS);
+
+            try {
+                await inPlaceOverSdb(carried);
+            } catch (error) {
+                if (!HELD_BY_ANOTHER_SESSION[error.code]) throw error;
+
+                throw refuse('sdbUnreachable',
+                    `sdb still turned the self-update away (${error.code}) after the root agent was ` +
+                    'released, so nothing was installed. POST /dev/root/arm brings root back; retry the ' +
+                    'install once sdb answers.');
+            }
+        };
+
         const runInstaller = async (carried) => {
             const { packageId } = carried.identity;
             const isSelf = packageId === SELF_PACKAGE_ID;
 
             phase('installing', carried.identity.name || carried.identity.packageId);
 
-            const logLines = (line) => sdbSays.info(line);
-
-            // A self-update installs in place: sdbd overwrites the files, and the
-            // caller then exits abnormally so auto-restart loads the new build.
-            // Uninstalling first would drop the connection — this process runs out
-            // of the package being removed, and the install never lands.
-            if (isSelf) {
-                sdbSays.info(`shell:0 vd_appinstall ${packageId} ${carried.stagedPath} (in place)`);
-
-                try {
-                    await sdb.withSession({ log: logLines },
-                        (session) => installer.run(session, carried.stagedPath, packageId));
-
-                    return carried;
-                } catch (error) {
-                    sdbSays.info(`in place refused (${error.code || 'install failed'}) — uninstalling the old copy first`);
+            try {
+                // A self-update installs in place: sdbd overwrites the files, and the
+                // caller then exits abnormally so auto-restart loads the new build.
+                // Uninstalling first would drop the connection: this process runs out
+                // of the package being removed, and the install never lands.
+                if (isSelf) {
+                    try {
+                        await inPlaceOverSdb(carried);
+                        return { ...carried, route: 'sdb' };
+                    } catch (error) {
+                        if (rootHoldsSdbd(error.code)) throw error;
+                        sdbSays.info(`in place refused (${error.code || 'install failed'}), uninstalling the old copy first`);
+                    }
                 }
+
+                await replaceOverSdb(carried);
+                return { ...carried, route: 'sdb' };
+            } catch (error) {
+                if (!rootHoldsSdbd(error.code)) throw error;
+
+                sdbSays.warn(`sdb refused the install (${error.code}) while the root agent holds its session`);
+
+                if (isSelf) {
+                    await selfUpdateOverSdb(carried, error);
+                    say.info('installed over sdb after releasing the root agent');
+                    return { ...carried, route: 'sdb' };
+                }
+
+                await overRoot(carried);
+                return { ...carried, route: 'root' };
             }
-
-            // Two copies of the same package start the service twice, so a copy that
-            // survived an earlier failed install has to go before the new one lands.
-            const uninstall = `shell:0 vd_appuninstall ${packageId}`;
-
-            sdbSays.info(uninstall);
-
-            await sdb.withSession({ log: logLines }, async (session) => {
-                const cleared = await session.exec(uninstall, { timeout: 30000 });
-                sdbSays.info(`old copy gone: ${String(cleared).trim() || '(clean)'}`);
-                return installer.run(session, carried.stagedPath, packageId);
-            });
-            return carried;
         };
 
         const recordOutcome = (carried) => {
@@ -180,7 +261,7 @@ function createInstaller({ sdb, device, config, resigner, store, log }) {
                     .slice(0, 20)
             });
 
-            return { packageId, appId, name, version };
+            return { packageId, appId, name, version, route: carried.route };
         };
 
         try {
@@ -194,7 +275,7 @@ function createInstaller({ sdb, device, config, resigner, store, log }) {
 
             held.at('finishing');
 
-            say.ok(`installed ${outcome.name || outcome.packageId} ${outcome.version || ''} in ${took(at())}`);
+            say.ok(`installed ${outcome.name || outcome.packageId} ${outcome.version || ''} over ${outcome.route} in ${took(at())}`);
 
             return outcome;
         } catch (error) {

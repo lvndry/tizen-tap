@@ -216,4 +216,4 @@ const choose = async () => {
     return ask(televisions);
 };
 
-module.exports = { choose, sweep, isAddress, nameOf, modeOf, detailOf };
+module.exports = { choose, sweep, nameOf };

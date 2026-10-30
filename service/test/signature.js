@@ -44,7 +44,7 @@ const mint = () => {
 const files = () => [
     { uri: 'config.xml', data: Buffer.from('<widget/>') },
     { uri: 'ui%2Fdist%2Findex.html', data: Buffer.from('<html>&amp; < > " \'</html>') },
-    { uri: 'ui%2Fdist%2Ftheme.wav', data: Buffer.from([0, 1, 2, 255]) },
+    { uri: 'ui%2Fdist%2Fwordmark.png', data: Buffer.from([0, 1, 2, 255]) },
     { uri: 'service%2Fdist%2Findex.js', data: Buffer.from('a<b && c>d') },
     { uri: 'icon.png', data: Buffer.from('\u00ff\u00fe binary-ish') }
 ];

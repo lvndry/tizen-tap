@@ -7,7 +7,7 @@
 // Old signatures are dropped rather than amended: every file is digested afresh, signed as the
 // author, then as the distributor over the author's signature, which is the order the format wants.
 //
-// install/signature.js is the `tizen` CLI's own signer taking PEM instead of a PKCS#12, including
+// install/signature.ts is the `tizen` CLI's own signer taking PEM instead of a PKCS#12, including
 // the `%2F` in its reference URIs, which looks like a bug and is what a television accepts.
 
 const JSZip = require('jszip');
@@ -105,4 +105,4 @@ async function resign(archive, certificates) {
     };
 }
 
-module.exports = { resign, openPair, deviceOf, devicesOf, SIGNATURE_FILE };
+module.exports = { resign, openPair, deviceOf, devicesOf };

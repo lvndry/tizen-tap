@@ -212,6 +212,33 @@ class RootChannel {
         return this._roundTrip('SHUTDOWN', timeoutMs);
     }
 
+    get busy() { return this.pending.size > 0; }
+
+    // The agent runs inside an sdbd session, and sdbd serves one session at a time, so the agent
+    // has to exit before anything else can use sdb. An agent that ignores SHUTDOWN loses its socket.
+    release(timeoutMs = 5000) {
+        if (!this.connected) return Promise.resolve();
+
+        this.shutdown(timeoutMs).catch(() => {});
+
+        return new Promise<void>((resolve) => {
+            const deadline = Date.now() + timeoutMs;
+            const tick = () => {
+                if (!this.connected) return resolve();
+                if (Date.now() > deadline) {
+                    const socket = this.socket;
+                    this.socket = null;
+                    this._resetSession();
+                    try { socket.destroy(); } catch (_) {}
+                    this.log('root channel: the agent did not leave on SHUTDOWN; its socket was closed');
+                    return resolve();
+                }
+                setTimeout(tick, 100);
+            };
+            tick();
+        });
+    }
+
     status() {
         return {
             listening: this.listening,

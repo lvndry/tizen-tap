@@ -67,4 +67,4 @@ function isNewer(candidate, current) {
     return compare(candidate, current) === 1;
 }
 
-module.exports = { parse, clean, compare, isNewer };
+module.exports = { clean, compare, isNewer };

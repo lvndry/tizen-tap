@@ -260,4 +260,4 @@ function startRecording(options) {
     return { log, since, subscribe, counts, format, uptime: elapsed, recordExit, previousRun, previous, recording };
 }
 
-module.exports = { startRecording, format, Facility, LEVELS, MAX_LINES };
+module.exports = { startRecording, format, Facility };

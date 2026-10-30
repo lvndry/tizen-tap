@@ -51,4 +51,4 @@ function readBody(request, limit = MAX_BODY) {
 });
 }
 
-module.exports = { json, failure, bytes, readBody, MAX_BODY };
+module.exports = { json, failure, bytes, readBody };

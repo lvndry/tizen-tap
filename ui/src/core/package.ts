@@ -1,7 +1,7 @@
 const LOCAL_HEADER = 0x04034b50;
 
 // An upload is the one source the service has no bytes for, so the same read happens here — a
-// deliberate second copy of the local-header walk in install/manifest.js, kept honest by both
+// deliberate second copy of the local-header walk in install/manifest.ts, kept honest by both
 // producing `{ packageId, appId, name, version, isWgt, icon }`. It fails quietly: the service still
 // refuses a bad package on install, with a reason.
 //

@@ -33,17 +33,15 @@ function eventually(poll, timeout = 2000) {
 }
 
 // The agent: connect, read hello, send AUTH, then answer frames.
-function fakeAgent(port, { uid = 0 } = {}) {
+function fakeAgent(port, { uid = 0, leavesOnShutdown = false } = {}) {
     return new Promise((resolve, reject) => {
         const socket = net.connect(port, '127.0.0.1');
         let buffered = Buffer.alloc(0);
         let nonce = null;
-        let seq = 0;
 
         const send = (payload) => socket.write(encode(SECRET, nonce, payload));
 
         const answer = (parts) => {
-            seq += 1;
             const verb = parts[0];
             const theirSeq = parts[1];
 
@@ -54,7 +52,11 @@ function fakeAgent(port, { uid = 0 } = {}) {
                 if (command === 'exit 3') return send(`RESULT\t${theirSeq}\t3\t0\t\t${Buffer.from('boom\n').toString('base64')}`);
                 return send(`RESULT\t${theirSeq}\t1\t0\t\t${Buffer.from('no such command\n').toString('base64')}`);
             }
-            if (verb === 'SHUTDOWN') return send(`BYE\t${theirSeq}`);
+            if (verb === 'SHUTDOWN') {
+                send(`BYE\t${theirSeq}`);
+                if (leavesOnShutdown) socket.end();
+                return undefined;
+            }
             send(`ERROR\t${theirSeq}\tunknown ${verb}`);
         };
 
@@ -139,6 +141,28 @@ async function main() {
             () => false,
             (error) => /not connected/.test(error.message)
         ), '');
+
+    // sdbd serves one session at a time and the agent holds one, so release() has to end it.
+    {
+        await fakeAgent(port, { leavesOnShutdown: true });
+        await eventually(() => channel.status().root);
+        check('an idle channel is not busy', channel.busy === false, String(channel.busy));
+
+        await channel.release(1000);
+        check('release lets an agent that honours SHUTDOWN leave', channel.status().connected === false, '');
+    }
+
+    {
+        const stubborn = await fakeAgent(port);
+        await eventually(() => channel.status().root);
+
+        const began = Date.now();
+        await channel.release(300);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        check('release closes the socket of an agent that ignores SHUTDOWN',
+            channel.status().connected === false && stubborn.destroyed && Date.now() - began < 1500,
+            `connected=${channel.status().connected} destroyed=${stubborn.destroyed}`);
+    }
 
     channel.close();
 }

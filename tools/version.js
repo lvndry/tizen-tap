@@ -12,55 +12,10 @@ const PACKAGE_FILES = [
     'ui/package.json'
 ];
 
-// package-lock.json carries the version four times, and is edited structurally: a replace of
-// `"version": "0.1.0"` would rewrite half of npm's registry along with it.
-// bun.lock (this repo's actual lockfile) is not a versioned JSON document, so a
-// repo keeping only it has nothing to check there — the entry reports as absent.
-const LOCK_FILES = ['package-lock.json', 'bun.lock'];
-
 const VERSION = /^\d+\.\d+\.\d+$/;
 
 const WIDGET_FILES = ['config.xml'];
 const WIDGET_LINE = /^(\s*<widget\b[^>]*?\bversion=")([^"]*)(")/m;
-
-function lockKeys() {
-    return PACKAGE_FILES.map((f) => (f === 'package.json' ? '' : f.replace(/\/package\.json$/, '')));
-}
-
-function eachLockVersion(lock, visit) {
-    if (typeof lock.version === 'string') visit(lock, 'version');
-    lockKeys().forEach((key) => {
-        const entry = lock.packages && lock.packages[key];
-        if (entry && typeof entry.version === 'string') visit(entry, 'version');
-    });
-}
-
-function readLockVersion(relative) {
-    let raw;
-    try { raw = readFileSync(join(ROOT, relative), 'utf8'); }
-    catch (e) { if (e.code === 'ENOENT') return null; throw e; }
-
-    let lock;
-    try { lock = JSON.parse(raw); }
-    catch { return null; }
-
-    const found = [];
-
-    eachLockVersion(lock, (holder, field) => found.push(holder[field]));
-
-    if (!found.length) return null;
-
-    return found.filter((v, i) => found.indexOf(v) === i).join(' / ');
-}
-
-function writeLockVersion(relative, version) {
-    const path = join(ROOT, relative);
-    const lock = JSON.parse(readFileSync(path, 'utf8'));
-
-    eachLockVersion(lock, (holder, field) => { holder[field] = version; });
-
-    writeFileSync(path, `${JSON.stringify(lock, null, 2)}\n`);
-}
 
 function readPackageVersion(relative) {
     return JSON.parse(readFileSync(join(ROOT, relative), 'utf8')).version;
@@ -93,7 +48,6 @@ function currentState() {
 
     PACKAGE_FILES.forEach((f) => entries.push({ file: f, version: readPackageVersion(f) }));
     WIDGET_FILES.forEach((f) => entries.push({ file: f, version: readWidgetVersion(f) }));
-    LOCK_FILES.forEach((f) => entries.push({ file: f, version: readLockVersion(f) }));
 
     return { source, entries };
 }
@@ -101,10 +55,6 @@ function currentState() {
 function apply(version) {
     PACKAGE_FILES.forEach((f) => writePackageVersion(f, version));
     WIDGET_FILES.forEach((f) => writeWidgetVersion(f, version));
-    LOCK_FILES.forEach((f) => {
-        try { writeLockVersion(f, version); }
-        catch (e) { if (e.code !== 'ENOENT') throw e; }
-    });
 }
 
 function main() {
@@ -139,7 +89,7 @@ function main() {
 
     ui.heading('version', state.source);
     state.entries.forEach((e) => {
-        if (e.version === null) ui.note('  ' + e.file + '  — not a versioned lockfile');
+        if (e.version === null) ui.fail(e.file, 'has no version');
         else if (e.version === state.source) ui.ok(e.file, e.version);
         else ui.fail(e.file, `${e.version} — expected ${state.source}`);
     });

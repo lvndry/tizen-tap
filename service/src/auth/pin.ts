@@ -61,5 +61,5 @@ function recordSuccess() {
 
 module.exports = {
     generate, matches, fresh, remaining, isLocked, recordFailure, recordSuccess,
-    DIGITS, MAX_ATTEMPTS, LOCKOUT_MS, DEVELOPER_PIN
+    DIGITS, DEVELOPER_PIN
 };

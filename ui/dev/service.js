@@ -4,7 +4,7 @@
 import { createHash } from 'crypto';
 
 // The real verdict table, so the failure shapes the UI renders come from the same place the service gets them.
-import verdicts from '../../service/src/install/verdicts.js';
+import verdicts from '../../service/src/install/verdicts.ts';
 
 const PIN = '386588';
 
@@ -519,4 +519,4 @@ const devService = ({ enabled }) => ({
     }
 });
 
-export { devService, PIN };
+export { devService };

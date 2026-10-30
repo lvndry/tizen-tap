@@ -22,6 +22,7 @@ const APP = {
     include: [
         'config.xml',
         'icon.png',
+        'service-icon.png',
         'ui/dist',
         'service/dist',
         'vendor'
