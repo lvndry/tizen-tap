@@ -42,46 +42,71 @@ modern Samsung smart TV with Developer Mode.</sub>
 
 ## Install
 
-The installer carries its own runtime.
+About fifteen minutes, most of it the TV rebooting. You need a computer on
+the same network as the TV, and the TV's remote.
 
-### Linux / macOS
-```sh
-curl -fsSL https://lvndry.github.io/tizen-tap/install.sh | sh
-```
+Two facts explain every step below:
 
-### Windows
-```powershell
-irm https://lvndry.github.io/tizen-tap/install.ps1 | iex
-```
+- **Host PC IP** (a Developer Mode setting) decides who may talk to the
+  TV's sdb daemon. To install the first time, it must be your computer.
+  Afterwards it must be `127.0.0.1`, so the TV installs its own apps.
+- **The TV reads that setting only on a real boot.** "Restart" below means
+  unplug the TV, wait 30 s, plug it back in. Standby from the remote does
+  not count, and a change without a real boot does nothing.
 
-It finds the TV, mints a Samsung certificate for your account, installs
-tizen-tap on the TV, and tells you which settings to change. Expect about ten minutes, mostly TV
-restarts.
+The Developer Mode dialog: on the TV open **Apps**, then type `1` `2` `3`
+`4` `5` on the remote (no number keys: hold Enter on the Apps screen to get
+a keypad).
 
-Two settings have to be changed by hand, because `sdb` only accepts an
-allowlist of commands. Both are under **Apps → hold Enter (or type 12345) →
-Settings → Developer mode**, and each needs a TV restart to take effect:
+1. **Find your computer's IP address** on the home network, for example
+   `192.168.1.7`. macOS: `ipconfig getifaddr en0`. Linux: `hostname -I`.
+   Windows: `ipconfig`, the IPv4 Address line.
+2. **Turn Developer Mode on and point it at your computer.** In the
+   Developer Mode dialog set **Developer mode** to **On** and **Host PC IP**
+   to the address from step 1, then OK.
+3. **Restart the TV** (unplug 30 s).
+4. **Run the installer** on your computer. It carries its own runtime:
 
-| When | Set **Host PC IP** to |
-| --- | --- |
-| Before installing | this computer's address (the installer prints it) |
-| After installing | `127.0.0.1` |
+   ```sh
+   # Linux / macOS
+   curl -fsSL https://lvndry.github.io/tizen-tap/install.sh | sh
+   ```
 
-After the second change, the TV installs apps over its own loopback and no
-other machine on the network can reach its sdb daemon.
+   ```powershell
+   # Windows
+   irm https://lvndry.github.io/tizen-tap/install.ps1 | iex
+   ```
 
-"Restart" here means unplugging the TV for 30 s. Standby from the remote
-does not count: sdbd reads Host PC IP only on a real boot. So an install
-takes two unplugs, one after each change. If `/dev/status` then says the
-root channel is not armed, `POST /dev/root/arm` once.
+   It finds the TV, mints a Samsung certificate for your account, installs
+   tizen-tap, and opens it on the TV. If it says the TV "dropped the
+   connection", step 3 did not happen: restart the TV and run it again.
+5. **Point Developer Mode back at the TV.** In the same dialog set **Host
+   PC IP** to `127.0.0.1`, then OK.
+6. **Restart the TV** (unplug 30 s) once more.
+7. **Check it.** Open Tizen Tap. The screen shows the 6-digit PIN, then:
 
-From a checkout (Node 20+):
+   ```sh
+   curl -H "x-homebrew-pin: <pin>" http://<tv-ip>:8091/dev/status
+   ```
+
+   `diagnosis` should read `Everything looks healthy.` If it says the root
+   channel is not armed, arm it once:
+   `curl -X POST -H "x-homebrew-pin: <pin>" http://<tv-ip>:8091/dev/root/arm`
+
+From then on the TV installs its own apps, and Host PC IP stays
+`127.0.0.1`. You only repeat these steps to reinstall tizen-tap from a
+computer, for example after a **Smart Hub reset**, which deletes every
+sideloaded app (tizen-tap and the Stremio server included). After
+reinstalling, put the Stremio server back as in
+[stremio/README.md](stremio/README.md).
+
+From a checkout (Node 20+), step 4 becomes:
 
 ```sh
 git clone https://github.com/lvndry/tizen-tap.git
 cd tizen-tap
 npm install
-npm run full-bootstrap          # or: -- <tv-ip>, if you know it
+npm run full-bootstrap -- <tv-ip>
 ```
 
 ## Using it
