@@ -83,7 +83,7 @@ sentence naming the single most-likely problem and the one action that
 fixes it (secondary issues appended as `Also: …`). Ask it *first*, before
 probing anything by hand. Examples of what it says:
 
-- `"sdbd is up but rejects the handshake. Two causes: (1) stale gate — the running sdbd
+- `"sdbd is up but rejects the handshake. Two causes: (1) stale gate: the running sdbd
   loaded the developer IP at restart and it is not 127.0.0.1; (2) a persisted lockout from
   many arm cycles. Toggle Developer Mode off/on to restart sdbd; …"`
 - `"root channel is not armed — POST /dev/root/arm."`
@@ -107,7 +107,7 @@ pair.js           one-time pairing; writes token.txt (the only credential)
 remote.js <keys>  send remote keys: power, home, ok, up, volumeUp, mute,
                   or any raw code (KEY_APPS, KEY_RED, ...)
                   key:hold long-presses; --text types into an open keyboard
-listen.js [--ask] watch what the TV pushes, live (often silent — see below)
+listen.js [--ask] watch what the TV pushes, live (often silent, see below)
 info.js           model, firmware, power state, developer IP, Wi-Fi MAC;
                   no token needed
 wake.js <MAC>     Wake-on-LAN (the MAC comes from info.js)
@@ -128,7 +128,9 @@ then `token.txt` is the key. Installing from a checkout of this repo is
 - **`:8091` = 000 and ping fails** → the TV is off. `wake.js`, wait 10s, retry.
 - **`:8091` = 000 and ping works** → service down after cold boot or
   self-update. `node app.js GJBBYNLkgP.TizenHomebrew --wait 8091`. Do not
-  loop it more than ~3 times.
+  loop it more than ~3 times. If it stays down, follow
+  [docs/troubleshooting.md](docs/troubleshooting.md) (close the preloaded
+  apps first with `node apps.js --close`).
 - **`:8091` = 200 but a call hangs** → the service is wedged. `POST /restart`,
   then retry once.
 - **`listen.js` prints nothing** → this model is quiet on the
@@ -171,7 +173,7 @@ Treat these as load-bearing, not guesses:
 - **It revives itself, but only when homebrew starts.** The homebrew service
   probes `11470` at 3s and 60s on every start and cross-launches the app if
   the port is silent (search its `/logs` for `stremio`). A cold boot that
-  leaves homebrew down leaves the server down too — relaunching homebrew
+  leaves homebrew down leaves the server down too. Relaunching homebrew
   (`app.js`, as above) brings both back. Do not `:8091/install`-replace
   homebrew to fix a dead server; that's a sledgehammer that also drops the
   connection mid-swap.

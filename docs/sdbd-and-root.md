@@ -45,33 +45,33 @@ only works when it is the Mac's IP. One slot, one owner — pick a default
 ## The sdbd service, as the firmware ships it
 
 Carved from the T-KSU2ECDEUC-1220.9 rootfs (VDFS2007, board key
-"KantSU2E 2023" — public, in theubusu/unixtract's keys.ukf). The tooling is
+"KantSU2E 2023", public, in theubusu/unixtract's keys.ukf). The tooling is
 in [rea-notes.md](rea-notes.md).
 
-**`sdbd-tcp.socket`** — systemd socket activation on 26101
+**`sdbd-tcp.socket`**: systemd socket activation on 26101
 (`ListenStream`, `SmackLabelIPIn=*`). The port answers even while the
 handshake logic resets the connection: "port open" is not "sdbd healthy".
 
-**`sdbd.service`** — `User=sdk`, `Type=notify`,
+**`sdbd.service`**: `User=sdk`, `Type=notify`,
 `EnvironmentFile=-/run/sdbd-env` (the dash: a missing file is fine),
 `ExecStart=/usr/sbin/sdbd $SDBD_CMDLINE`, `PIDFile=/tmp/.sdbd.pid`.
-The peer-IP gate value comes from the command line built at restart —
+The peer-IP gate value comes from the command line built at restart;
 it is not read live. Changing the DB value alone does not reach a
 running sdbd.
 
-**`sdbd_start.sh`** (carved, 2449 B) — the interactive sdb menu:
+**`sdbd_start.sh`** (carved, 2449 B) is the interactive sdb menu:
 show current setting, set mode (0 = off, 1 = LAN, 2 = HyperUART),
 set client IP, set HyperUART IP, quit. Mode 1 writes
 `system db/sdk/develop/ip` + `mode` in the buxton2 DB, then
 `systemctl stop sdbd; systemctl start sdbd`. It does **not** write
-`/run/sdbd-env` — the dialog UI's companion does that, or the arg
+`/run/sdbd-env`. The dialog UI's companion does that, or the arg
 stays empty and sdbd falls back to its own defaults. Open question.
 
 ### A persisted handshake lockout
 
 After many root-arm cycles (each arm spawns the dotnet agent under
 `sdbd-tarlauncher`), sdbd can enter a state where 26101 accepts TCP but
-every handshake is reset — for LAN and loopback clients alike. It
+every handshake is reset, for LAN and loopback clients alike. It
 survives unplug cold boots and Developer Mode toggles. Same signature is
 documented in theubusu/samsung-tv-root issue #15 (S90F, Tizen 9). It may
 self-expire; the TTL is unknown. The reported next-step cure is a Smart
