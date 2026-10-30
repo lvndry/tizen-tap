@@ -22,20 +22,30 @@ const { stremioLanHost } = require('./routes/status.ts');
 const STREMIO_PORT = 11470;
 const STREMIO_APP_ID = 'S6K2WQ8MnP.StremioServer';
 const STREMIO_NAME = 'stremio server';
-const PROBE_TIMEOUT_MS = 1500;
+const PROBE_TIMEOUT_MS = 5000;
 const PERIODIC_CHECK_MS = 60_000;
 
-// Whether a port is answering on a given host. `host` is a value or a resolver
-// (so the LAN address can be re-read on every probe); any HTTP reply is an up
-// port, a refused connection, a timeout, or a dead socket is down.
+// The sweep relaunches only after this many failed checks in a row. Relaunching
+// opens the server's page, which takes the screen from whatever is playing: on a
+// CU7105 a server busy streaming missed single checks, and each relaunch threw
+// the viewer out of the Stremio client mid-film.
+const FAILURES_BEFORE_RELAUNCH = 3;
+
+// Whether a port is accepting connections on a given host. `host` is a value or
+// a resolver (so the LAN address can be re-read on every probe). It only
+// connects: a server busy streaming accepts at once but can take seconds to
+// answer an HTTP request, and that slowness is not a dead server.
 function makePortProbe(host) {
     const resolve = typeof host === 'function' ? host : () => host || '127.0.0.1';
 
     return (port) => new Promise((done) => {
-        const req = require('http').get({ host: resolve(), port, timeout: PROBE_TIMEOUT_MS },
-            (res) => { res.resume(); res.on('end', () => done(true)); });
-        req.on('timeout', () => { req.destroy(); done(false); });
-        req.on('error', () => done(false));
+        const socket = require('net').connect({ host: resolve(), port });
+        const finish = (up) => { socket.destroy(); done(up); };
+
+        socket.setTimeout(PROBE_TIMEOUT_MS);
+        socket.once('connect', () => finish(true));
+        socket.once('timeout', () => finish(false));
+        socket.once('error', () => finish(false));
     });
 }
 
@@ -45,10 +55,16 @@ function makePortProbe(host) {
 // timers. The sweep is unref'd so it never holds the event loop open on its
 // own. The in-flight flag means a check that is still probing is never
 // re-entered: a slow probe cannot queue a second launch.
-function createWatchdog({ probe, launch, intervalMs = PERIODIC_CHECK_MS, setInterval = globalThis.setInterval, clearInterval = globalThis.clearInterval }) {
+//
+// An explicit check (the start-time windows) relaunches on its first failure:
+// right after a start the server is either up or really down, and nobody is
+// watching yet. The sweep is patient and waits for FAILURES_BEFORE_RELAUNCH in
+// a row; any answering check resets the count.
+function createWatchdog({ probe, launch, intervalMs = PERIODIC_CHECK_MS, failuresBeforeRelaunch = FAILURES_BEFORE_RELAUNCH, setInterval = globalThis.setInterval, clearInterval = globalThis.clearInterval }) {
     let inFlight = false;
+    let failuresInARow = 0;
 
-    function check(label) {
+    function check(label, { patient = false } = {}) {
         if (inFlight) return Promise.resolve();
 
         inFlight = true;
@@ -56,14 +72,22 @@ function createWatchdog({ probe, launch, intervalMs = PERIODIC_CHECK_MS, setInte
         return Promise.resolve()
             .then(() => probe(STREMIO_PORT))
             .then((up) => {
-                if (up) return;
+                if (up) {
+                    failuresInARow = 0;
+                    return;
+                }
+
+                failuresInARow += 1;
+                if (patient && failuresInARow < failuresBeforeRelaunch) return;
+
+                failuresInARow = 0;
                 launch(STREMIO_APP_ID, STREMIO_NAME, label);
             })
             .catch(() => {})
             .then(() => { inFlight = false; });
     }
 
-    const sweep = setInterval(() => { check('periodic check'); }, intervalMs);
+    const sweep = setInterval(() => { check('periodic check', { patient: true }); }, intervalMs);
     if (typeof sweep.unref === 'function') sweep.unref();
 
     return {
@@ -76,5 +100,6 @@ module.exports = {
     makePortProbe,
     createWatchdog,
     stremioLanHost,
-    PERIODIC_CHECK_MS
+    PERIODIC_CHECK_MS,
+    FAILURES_BEFORE_RELAUNCH
 };

@@ -211,7 +211,11 @@ Treat these as load-bearing, not guesses:
   `127.0.0.1`. Confirm from the TV's side, not the Mac's.
 - **It revives itself, but only when homebrew starts.** The homebrew service
   probes `11470` at 3s and 60s on every start and cross-launches the app if
-  the port is silent (search its `/logs` for `stremio`). A cold boot that
+  the port is silent (search its `/logs` for `stremio`). After that a 60 s
+  sweep keeps watching, but relaunches only after three failed checks in a
+  row: the relaunch opens the server's page, which takes the screen from
+  whatever is playing, and a server busy streaming can miss one check. The
+  probe is a TCP connect, not an HTTP request, for the same reason. A cold boot that
   leaves homebrew down leaves the server down too. Relaunching homebrew
   (`app.js`, as above) brings both back. Do not `:8091/install`-replace
   homebrew to fix a dead server; that's a sledgehammer that also drops the

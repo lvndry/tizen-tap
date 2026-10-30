@@ -5,7 +5,9 @@
 'use strict';
 
 const { test, expect } = require('bun:test');
-const { makePortProbe, createWatchdog, stremioLanHost, PERIODIC_CHECK_MS } = require('../src/revive.ts');
+const { makePortProbe, createWatchdog, stremioLanHost, PERIODIC_CHECK_MS, FAILURES_BEFORE_RELAUNCH } = require('../src/revive.ts');
+
+const settle = () => new Promise((done) => setTimeout(done, 0));
 
 // Timers with a handle the test can fire by hand: setInterval records the
 // callback, clearInterval records it was cleared.
@@ -33,20 +35,25 @@ function watchdogFor(probe, fake) {
     return { watch, calls, seen };
 }
 
-test('createWatchdog: the sweep fires every 60 s, is unrefd, and relaunches a down server', async () => {
+test('createWatchdog: the sweep fires every 60 s, is unrefd, and relaunches a server down three checks in a row', async () => {
     const f = fakeTimers();
     const { watch, calls, seen } = watchdogFor(async () => false, f);
 
     expect(f.state.ms).toBe(PERIODIC_CHECK_MS);
     expect(f.state.ms).toBe(60_000);
     expect(f.state.unrefs).toBe(1);
+    expect(FAILURES_BEFORE_RELAUNCH).toBe(3);
 
-    f.state.tick(); // the 60 s sweep fires a check
-    expect(calls.launched).toBe(0); // still probing
+    // Each sweep's check is in flight and holds the guard, so settle the
+    // microtask chain after every tick before asserting.
+    for (let sweep = 1; sweep < FAILURES_BEFORE_RELAUNCH; sweep += 1) {
+        f.state.tick();
+        await settle();
+        expect(calls.launched).toBe(0);
+    }
 
-    // The sweep's check is in flight and holds the guard, so the launch
-    // arrives from it: settle the microtask chain, then assert.
-    await new Promise((done) => setTimeout(done, 0));
+    f.state.tick();
+    await settle();
 
     expect(calls.launched).toBe(1);
     expect(seen[0]).toEqual({ appId: 'S6K2WQ8MnP.StremioServer', name: 'stremio server', label: 'periodic check' });
@@ -114,6 +121,61 @@ test('createWatchdog: a probe that rejects relaunches nothing and frees the guar
             w2.stop();
         });
     });
+});
+
+test('createWatchdog: an answering sweep resets the count, so scattered misses never relaunch', async () => {
+    const f = fakeTimers();
+    const answers = [false, false, true, false, false, true, false, false];
+    const { watch, calls } = watchdogFor(async () => answers.shift(), f);
+
+    while (answers.length) {
+        f.state.tick();
+        await settle();
+    }
+
+    expect(calls.launched).toBe(0);
+    watch.stop();
+});
+
+test('createWatchdog: the count starts over after a relaunch', async () => {
+    const f = fakeTimers();
+    const { watch, calls } = watchdogFor(async () => false, f);
+
+    for (let sweep = 0; sweep < FAILURES_BEFORE_RELAUNCH * 2 - 1; sweep += 1) {
+        f.state.tick();
+        await settle();
+    }
+
+    expect(calls.launched).toBe(1);
+
+    f.state.tick();
+    await settle();
+    expect(calls.launched).toBe(2);
+    watch.stop();
+});
+
+test('createWatchdog: a start-time check still relaunches on its first failure', async () => {
+    const f = fakeTimers();
+    const { watch, calls, seen } = watchdogFor(async () => false, f);
+
+    await watch.check('first check');
+
+    expect(calls.launched).toBe(1);
+    expect(seen[0].label).toBe('first check');
+    watch.stop();
+});
+
+test('makePortProbe: a port that accepts but never answers HTTP is up, as a server busy streaming is', async () => {
+    const sockets = [];
+    const silent = require('net').createServer((socket) => { sockets.push(socket); });
+    await new Promise((done) => silent.listen(0, '127.0.0.1', () => done()));
+
+    try {
+        expect(await makePortProbe('127.0.0.1')(silent.address().port)).toBe(true);
+    } finally {
+        sockets.forEach((socket) => socket.destroy());
+        await new Promise((done) => silent.close(() => done()));
+    }
 });
 
 function listen(server) {
