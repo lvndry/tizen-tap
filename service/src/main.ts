@@ -22,11 +22,15 @@ const { took } = require('./obs/units.ts');
 const { homedir } = require('os');
 
 const { startRecording, Facility } = require('./obs/log.ts');
+const { createFlightRecorder } = require('./obs/flight.ts');
 const runtime = require('./obs/runtime.ts');
 const platform = require('./obs/platform.ts');
 const memory = require('./obs/memory.ts');
+const { CONFIG_DIR } = require('./config.ts');
 
-const recorded = startRecording();
+// Opened before the first line is recorded, so last run's log is set aside and judged before this
+// run's can overwrite it.
+const recorded = startRecording({ flight: createFlightRecorder({ dir: CONFIG_DIR }) });
 const log = recorded.log;
 
 const { createStore } = require('./state.ts');
@@ -156,6 +160,11 @@ function start() {
 
     svc.info(`tizen tap ${BUILD} starting`);
     svc.info(`${runtime.summary()}, pid ${process.pid}`);
+
+    const previousRun = recorded.previousRun();
+    if (previousRun) {
+        (previousRun.endedCleanly === false ? svc.warn : svc.info)(`${previousRun.summary}; GET /logs/previous has its log`);
+    }
 
     const devLog = log.on(Facility.DEV);
 

@@ -149,7 +149,7 @@ function parseOomKills(output) {
 
 const MSG_SDBD_DOWN = 'sdbd is not running — toggle Developer Mode off/on in Settings → General → ' +
     'Developer mode, then wait ~30 s.';
-const MSG_IP_MISMATCH = 'sdbd is up but rejects the handshake. Two causes: (1) stale gate — the running sdbd ' +
+const MSG_IP_MISMATCH = 'sdbd is up but rejects the handshake. Two causes: (1) stale gate: the running sdbd ' +
     'loaded the developer IP at restart and it is not 127.0.0.1; (2) a persisted lockout from many arm cycles. ' +
     'Toggle Developer Mode off/on to restart sdbd; if it still rejects, wait for self-expiry or do a Smart Hub reset.';
 const MSG_ROOT_NOT_ARMED = 'root channel is not armed — POST /dev/root/arm.';
@@ -158,13 +158,17 @@ const MSG_STREMIO_OOM = 'Stremio server is down and the kernel\'s OOM killer has
     'the TV is out of memory; the service relaunches it, and freeing RAM (TV: Settings → Device care → RAM, or close ' +
     'open apps) is the real fix.';
 
+const MSG_PREVIOUS_ABRUPT = 'the previous run ended without an exit record (killed, e.g. by the out-of-memory ' +
+    'killer, or power loss); GET /logs/previous has its last lines.';
+
 function memoryCriticalMessage(memory) {
     return `memory pressure is critical (MemAvailable ${memory.available_mb} MB of ${memory.total_mb} MB) — ` +
         'expect services to be killed by the kernel until RAM frees up.';
 }
 
 // Pure: given a /dev/status state, say what is wrong. The first matching rule
-// leads; every other rule that also matches is appended as "Also: …".
+// leads; every other rule that also matches is appended as "Also: …". A past
+// death never leads: it explains history, not what is broken now.
 function diagnose(state) {
     const rules: string[] = [];
 
@@ -192,9 +196,9 @@ function diagnose(state) {
         rules.push(memoryCriticalMessage(state.memory));
     }
 
-    if (rules.length === 0) return 'Everything looks healthy.';
+    const primary = rules.length ? rules.shift() : 'Everything looks healthy.';
 
-    const primary = rules.shift();
+    if (state.previousRun && state.previousRun.endedCleanly === false) rules.push(MSG_PREVIOUS_ABRUPT);
 
     if (rules.length === 0) return primary;
     // Each rule already ends in a period; strip them for the joined list and add one.
@@ -274,6 +278,7 @@ async function buildStatus(probes) {
         memory,
         oom,
         launches: probes.launches(),
+        previousRun: probes.previousRun ? probes.previousRun() : null,
         boot: {
             uptime_s: typeof uptime === 'number' ? Math.round(uptime) : null,
             // This firmware's power button is deep sleep, so a fresh /proc/uptime is the only
@@ -497,6 +502,12 @@ function register(ctx, router) {
                 uptime: ctx.recorded.uptime()
             })));
 
+    // The log of the run before this one, kept on disk because the kill that ends a run on this set
+    // takes the in-memory ring with it.
+    router.on.get('/logs/previous', (request, response) =>
+        authorisedRead(request, response, () =>
+            json(response, { ...ctx.recorded.previous(), recording: ctx.recorded.recording() })));
+
     router.on.get('/packages', (request, response) =>
         authorisedRead(request, response, () =>
             packages.list().then(
@@ -528,6 +539,7 @@ function register(ctx, router) {
                 uptimeSeconds: realUptimeSeconds,
                 meminfo: realMeminfo,
                 launches: () => recentLaunches(10),
+                previousRun: () => ctx.recorded.previousRun(),
                 recentErrors: () => realRecentErrors(ctx.recorded)
             }));
         } catch (error) {

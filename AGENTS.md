@@ -54,6 +54,7 @@ node remote.js power home ok up down left right volumeUp mute
 | `GET /version` | build, uptime, node version — the liveness check |
 | `GET /health` | port, on-TV, LAN addresses |
 | `GET /logs?since=<seq>` | the service's own log, JSON, resumable |
+| `GET /logs/previous` | the previous run's log from disk, `endedCleanly` (null on a first run) and its `tail` |
 | `GET /packages` | everything installed on the TV |
 | `GET /pin` | the current pairing PIN (loopback only) |
 | `POST /install` | install a `.wgt` (body), the universal verb |
@@ -133,6 +134,12 @@ then `token.txt` is the key. Installing from a checkout of this repo is
   apps first with `node apps.js --close`).
 - **`:8091` = 200 but a call hangs** → the service is wedged. `POST /restart`,
   then retry once.
+- **The service keeps dying** → its in-memory log dies with it, but every
+  line is also kept on disk (`homebrewLog.txt` in its config dir, rotated at
+  256 KB). Once it is up for a moment, read `GET /logs/previous`:
+  `endedCleanly: false` means that run left no exit record (killed, e.g. by
+  the out-of-memory killer, or power loss), and `tail` is the last thing it
+  said. `/dev/status` repeats the verdict as `previousRun`.
 - **`listen.js` prints nothing** → this model is quiet on the
   remote channel by design. Silence is a working result, not an error. Read
   `/logs` or `/packages` instead.

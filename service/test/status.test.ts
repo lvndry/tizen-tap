@@ -126,7 +126,7 @@ test('diagnose: a rejected handshake names the two real causes', () => {
     state.sdbd.handshake = 'rejected';
 
     expect(diagnose(state)).toBe(
-        'sdbd is up but rejects the handshake. Two causes: (1) stale gate — the running sdbd ' +
+        'sdbd is up but rejects the handshake. Two causes: (1) stale gate: the running sdbd ' +
         'loaded the developer IP at restart and it is not 127.0.0.1; (2) a persisted lockout from many arm cycles. ' +
         'Toggle Developer Mode off/on to restart sdbd; if it still rejects, wait for self-expiry or do a Smart Hub reset.');
 });

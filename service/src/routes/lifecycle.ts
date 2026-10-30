@@ -34,6 +34,8 @@ function register(ctx, router) {
         // The response has to clear the socket first, because the caller waits on it.
         setTimeout(() => {
             svc.info(`exiting after ${took(recorded.uptime())} ${why}`);
+            recorded.recordExit(restart ? 'restart requested' : 'shutdown requested');
+
             if (restart) {
                 // An uncaught throw is what reliably trips auto-restart on this firmware;
                 // a non-zero exit code is flaky. Let the callback throw so the process dies.

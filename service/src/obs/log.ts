@@ -2,6 +2,8 @@
 
 // The service's own log, in dmesg's shape, because sdbd's allowlist excludes every log tool on the TV.
 
+const { RUN_RECORD, EXIT_RECORD } = require('./flight.ts');
+
 const MAX_LINES = 1000;
 const MAX_LINE = 2000;
 
@@ -66,12 +68,31 @@ const SINK = (() => {
     return sink;
 })();
 
+// Its own guard, not the sink's: a process reloaded from a build older than the flight recorder already
+// has a sink, and would otherwise never get the hook.
+const EXIT_HOOK = (() => {
+    if ((process as any).__homebrewExitHook) return (process as any).__homebrewExitHook;
+
+    const hook: { recordExit: null | ((reason: string) => void) } = { recordExit: null };
+
+    process.on('exit', (code) => {
+        try {
+            if (hook.recordExit) hook.recordExit(`process exit, code ${code}`);
+        } catch (e) {}
+    });
+
+    (process as any).__homebrewExitHook = hook;
+
+    return hook;
+})();
+
 // `print` and `capture` exist for the test, which records neither into nor from the suite's own console.
 function startRecording(options) {
     const settings = options || {};
     const max = settings.max || MAX_LINES;
     const keepDebug = settings.debug !== undefined ? !!settings.debug : !!process.env.HOMEBREW_DEBUG;
     const capture = settings.capture !== undefined ? !!settings.capture : true;
+    const flight = settings.flight || null;
 
     const lines: any[] = [];
     let sequence = 0;
@@ -149,6 +170,8 @@ function startRecording(options) {
             lines.push(line);
             while (lines.length > max) lines.shift();
 
+            if (flight) flight.append(format(line));
+
             return line;
         });
 
@@ -193,6 +216,35 @@ function startRecording(options) {
         );
     }
 
+    let exitRecorded = false;
+
+    // The first reason wins: a deliberate restart is followed by the process's own exit event.
+    function recordExit(reason) {
+        if (!flight || exitRecorded) return;
+
+        exitRecorded = true;
+        write('info', Facility.SVC, [`${EXIT_RECORD} ${reason}`]);
+    }
+
+    if (flight) {
+        write('info', Facility.SVC, [`${RUN_RECORD} ${flight.pid}`]);
+        EXIT_HOOK.recordExit = recordExit;
+    }
+
+    function previousRun() {
+        return flight ? flight.previousRun() : null;
+    }
+
+    function previous() {
+        return flight
+            ? flight.previous()
+            : { endedCleanly: null, reason: null, pid: null, summary: 'the log is not kept on disk', lines: [], tail: [] };
+    }
+
+    function recording() {
+        return flight ? flight.recording() : null;
+    }
+
     function since(sequenceNumber) {
         const from = Number(sequenceNumber) || 0;
         return lines.filter((line) => line.seq > from);
@@ -205,7 +257,7 @@ function startRecording(options) {
     }, {});
 }
 
-    return { log, since, subscribe, counts, format, uptime: elapsed };
+    return { log, since, subscribe, counts, format, uptime: elapsed, recordExit, previousRun, previous, recording };
 }
 
 module.exports = { startRecording, format, Facility, LEVELS, MAX_LINES };
