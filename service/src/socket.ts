@@ -1,6 +1,6 @@
 'use strict';
 
-// HTTP answers single questions; the socket handles everything that unfolds. `protocol.js` fixes the shapes.
+// HTTP answers single questions; the socket handles everything that unfolds. `protocol.ts` fixes the shapes.
 
 const { readdirSync, statSync } = require('fs');
 const { join } = require('path');
@@ -83,7 +83,7 @@ function attach({ server, store, authorise, installer, catalog, updates, relay, 
             send(Outbound.ERROR, {
                 code: expected ? error.code : ErrorCode.INTERNAL,
                 message: (error && error.message) || 'Unexpected failure.',
-                // Only on failures verdicts.js recognized: what to do, which the UI cannot know.
+                // Only on failures verdicts.ts recognized: what to do, which the UI cannot know.
                 remedy: (error && error.remedy) || null,
                 fatal: false
             });

@@ -14,7 +14,7 @@ const verdicts = require('../service/src/install/verdicts.ts');
 
 const STAGING_DIR = '/home/owner/share/tmp/sdk_tools';
 
-// Must match service/src/config.js. In the staging directory because sdb refuses the rest of share/.
+// Must match service/src/config.ts. In the staging directory because sdb refuses the rest of share/.
 const HANDOFF_PATH = `${STAGING_DIR}/homebrewCerts.json`;
 
 // The name is not free: vd_appinstall answers a path it does not like with a security error that

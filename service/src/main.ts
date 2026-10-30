@@ -137,9 +137,9 @@ function reviveCompanions() {
         }
     }
 
-    // Same windows and labels as before, but through the watchdog's guarded
-    // check: a slow probe cannot stack a second launch, and the 60 s sweep
-    // keeps the server alive after this start is long over.
+    // The default windows, through the watchdog's guarded check: a slow
+    // probe cannot stack a second launch, and the 60 s sweep keeps the
+    // server alive after this start is long over.
     schedule((label) => watchdog.check(label));
 
     // Every start puts the dashboard back on the glass — standby resume

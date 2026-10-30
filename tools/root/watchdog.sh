@@ -2,7 +2,7 @@
 # Root watchdog: self-heals the TV's homebrew stack after any wake event.
 #
 # Installed to /home/owner/share/tmp/sdk_tools/watchdog.sh and spawned
-# detached as uid 0 (see docs/boot-watchdog.md). The CU7105 "power button"
+# detached as uid 0 (see docs/root.md). The CU7105 "power button"
 # is a standby resume, not a cold boot (uptime keeps counting), so the
 # on-boot="true" app attribute and the service's isBootStart() gate never
 # fire on normal usage. This watchdog does not care why the stack is down —
