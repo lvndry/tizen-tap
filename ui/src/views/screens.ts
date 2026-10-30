@@ -9,9 +9,6 @@ function masthead(state) {
     ${wordmark()}
     <span class="inline">
       <span class="micro mono">${state.connection}</span>
-      <button class="btn btn-quiet" data-focus="theme" data-on-click="theme"
-              aria-pressed="${state.themeOn}"
-              title="The Homebrew Channel theme">${state.themeOn ? 'theme · on' : 'theme · off'}</button>
     </span>
   </div>`;
 }
