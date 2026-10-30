@@ -76,7 +76,8 @@
          booting the service is meant to avoid. See service/src/config.js. -->
     <tizen:service id="GJBBYNLkgP.TizenHomebrewService" auto-restart="true" on-boot="true">
         <tizen:content src="service/dist/index.js"/>
-        <tizen:name>TizenHomebrewService</tizen:name>
+        <tizen:name>Tizen Tap Service</tizen:name>
+        <tizen:icon src="service-icon.png"/>
         <tizen:description>Serves the Tizen Tap UI and installs packages over loopback SDB.</tizen:description>
     </tizen:service>
 
