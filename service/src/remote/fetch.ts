@@ -80,4 +80,4 @@ async function getBuffer(url, options = {}) {
     return body;
 }
 
-module.exports = { request, getJson, getBuffer, MAX_REDIRECTS, DEFAULT_TIMEOUT };
+module.exports = { request, getJson, getBuffer, DEFAULT_TIMEOUT };

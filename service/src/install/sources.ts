@@ -113,4 +113,4 @@ async function resolve({ source, reference, asset = null, catalog = [], upload =
     }
 }
 
-module.exports = { resolve, latestRelease, pickAsset, MAX_PACKAGE };
+module.exports = { resolve, latestRelease, pickAsset };

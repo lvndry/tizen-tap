@@ -4,7 +4,7 @@
 //
 // Installing is the long road — an upload, a re-sign, and a hand-off to sdbd —
 // so it reports its phases and, on a self-update, exits abnormally so the
-// firmware's auto-restart loads the new build in its place (see lifecycle.js).
+// firmware's auto-restart loads the new build in its place (see lifecycle.ts).
 
 'use strict';
 

@@ -22,7 +22,7 @@ const CREDITS = [
 
     { head: 'Code that is shipped' },
     { name: 'adbhost', by: 'Andrey Sidorov', at: 'github.com/sidorares/node-adbhost' },
-    { note: 'The ADB wire protocol, vendored and repaired — service/src/tv/adb.js.' },
+    { note: 'The ADB wire protocol, vendored and repaired — service/src/tv/adb.ts.' },
     { name: 'ws', by: 'Einar Otto Stangvik', at: 'github.com/websockets/ws' },
     { name: 'express', by: 'TJ Holowaychuk', at: 'github.com/expressjs/express' },
     { name: 'cors', by: 'Troy Goode', at: 'github.com/expressjs/cors' },

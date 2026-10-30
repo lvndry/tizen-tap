@@ -22,7 +22,7 @@
 
 const { execFileSync } = require('child_process');
 const {
-    copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync
+    copyFileSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync
 } = require('fs');
 const { join } = require('path');
 const { randomBytes } = require('crypto');

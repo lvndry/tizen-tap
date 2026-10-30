@@ -2,7 +2,7 @@
 
 // A .wgt reaches the interface as a filename, and the name, version, id and icon are all inside it.
 //
-// Nothing here throws: a preview is a courtesy, and pipeline.js is where a bad package is refused.
+// Nothing here throws: a preview is a courtesy, and pipeline.ts is where a bad package is refused.
 
 const { closeSync, openSync, readSync } = require('fs');
 
@@ -100,4 +100,4 @@ function describeFile(path) {
     }
 }
 
-module.exports = { describe, describeFile, iconOf, HEAD, MAX_ICON };
+module.exports = { describe, describeFile, HEAD, MAX_ICON };

@@ -81,9 +81,9 @@ function say(text, level = 'info') {
 
 window.onerror = (message, _source, line) => say(`page error: ${message} (line ${line})`, 'err');
 
-// The one thing left on HTTP: a single shot with no answer worth waiting for. Everything this page
-// used to ask for repeatedly now arrives over the socket instead. The PIN comes from the service's
-// own greeting, which it gives to loopback callers.
+// The one thing on HTTP: a single shot with no answer worth waiting for. Everything else this page
+// needs arrives over the socket. The PIN comes from the service's own greeting, which it gives to
+// loopback callers.
 function post(path) {
     return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();

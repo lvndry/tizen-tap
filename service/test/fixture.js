@@ -97,4 +97,4 @@ const wgtWithIcon = () => zipAll([
 
 const notAPackage = () => zip('readme.txt', Buffer.from('not a package', 'utf8'));
 
-module.exports = { wgt, wgtWithIcon, notAPackage, zip, zipAll, crc32, PIXEL };
+module.exports = { wgt, wgtWithIcon, notAPackage, zip, zipAll, PIXEL };

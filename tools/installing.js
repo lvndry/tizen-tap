@@ -14,7 +14,7 @@ const verdicts = require('../service/src/install/verdicts.ts');
 
 const STAGING_DIR = '/home/owner/share/tmp/sdk_tools';
 
-// Must match service/src/config.js. In the staging directory because sdb refuses the rest of share/.
+// Must match service/src/config.ts. In the staging directory because sdb refuses the rest of share/.
 const HANDOFF_PATH = `${STAGING_DIR}/homebrewCerts.json`;
 
 // The name is not free: vd_appinstall answers a path it does not like with a security error that
@@ -241,6 +241,5 @@ const install = async (session, options) => {
 const handOff = (session, pair) => push(session, HANDOFF_PATH, Buffer.from(JSON.stringify(pair)));
 
 module.exports = {
-    connect, install, handOff, push, isSigned, idsIn, manifestIn, launchApp, confirmInstalled,
-    STAGING_DIR, HANDOFF_PATH, REMOTE_WGT
+    connect, install, handOff, push, isSigned, idsIn, manifestIn, launchApp
 };

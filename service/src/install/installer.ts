@@ -75,4 +75,4 @@ function runAsRoot(channel, path, packageId) {
         .then((result) => interpretPkgcmd(result, { packageId }));
 }
 
-module.exports = { stage, run, runAsRoot, rootCommand, interpretPkgcmd, STAGING_DIR };
+module.exports = { stage, run, runAsRoot, rootCommand, interpretPkgcmd };

@@ -232,4 +232,4 @@ function deck(state) {
       </div>`;
 }
 
-export { masthead, connect, status, log, overlay, deck, windowOf, wordmark, code, band, ROWS, SPARE };
+export { masthead, connect, status, log, overlay, deck, windowOf, wordmark, code, band };

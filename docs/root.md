@@ -38,14 +38,11 @@ else does.
 - **`GET /dev/status` says when something didn't heal** instead of
   leaving you to find out.
 
-The **root watchdog** (`tools/root/watchdog.sh`) is the safety net for the
-cases those miss: on this firmware the power button is a standby resume,
-not a boot, so the platform's `on-boot` flag fires for neither. It's
-designed and in the repo but **not yet installable on the CU7105** — a
-detached root process doesn't survive the root channel, UEP blocks
-unsigned scripts, and the system dirs are read-only. Until that lands,
-auto-arm + revive is the net, and `/dev/status` names the gap if it ever
-bites.
+On this firmware the power button is a standby resume, not a boot, so the
+platform's `on-boot` flag does not fire after it. Auto-arm plus revive is
+the safety net for that, and `/dev/status` names the gap if it bites. (A
+root watchdog script was tried and removed: a detached root process does
+not survive the root channel, and UEP blocks unsigned scripts.)
 
 ## What it unlocks
 

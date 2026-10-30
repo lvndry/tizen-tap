@@ -105,4 +105,4 @@ function createRepl(context) {
     return { evaluate, openInspector, names };
 }
 
-module.exports = { createRepl, MAX_OUTPUT, DEPTH };
+module.exports = { createRepl };
