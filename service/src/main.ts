@@ -237,7 +237,10 @@ function start() {
         log: (line) => svc.info(line)
     });
 
-    const installer = createInstaller({ sdb, device, config, resigner, store, log, rootChannel: channel });
+    const installer = createInstaller({
+        sdb, device, config, resigner, store, log, rootChannel: channel,
+        rearmRoot: () => rootArm.arm(sdb, channel, (line) => svc.info(line))
+    });
 
     function announce(state, previous) {
         if (!previous) {

@@ -62,6 +62,7 @@ node remote.js power home ok up down left right volumeUp mute
 | `POST /dev/eval`, `/dev/sdb`, `/dev/shell` | dev builds only — raw access |
 | `POST /dev/root/exec` | run a line of `/bin/sh` as uid 0 (PIN-gated) |
 | `GET /dev/root`, `POST /dev/root/arm` | root channel state / re-arm it |
+| `POST /dev/root/release` | hand sdbd's one session back (installs do this by themselves); root stays off until `/dev/root/arm` |
 | `GET /dev/root/developer-ip`, `POST /dev/root/developer-ip` | read / set sdbd's Host PC IP (`{"ip":"<dotted quad>"}`), then restart sdbd; root required, drops the root channel |
 | `GET /dev/processes?limit=25` | top processes by RSS with oom_score_adj, meminfo summary, recent OOM kills; root required, one exec |
 
@@ -166,11 +167,13 @@ then `token.txt` is the key. Installing from a checkout of this repo is
   remote channel by design. Silence is a working result, not an error. Read
   `/logs` or `/packages` instead.
 - **Installs while the root agent is connected** → the agent holds sdbd's
-  one session, so sdb turns the install away mid-handshake. The service then
-  installs the staged file as root with `pkgcmd`; the result says
-  `route: "root"`. A self-update cannot go that way (replacing the service
-  closes the root channel mid-install), so the service releases the agent,
-  installs over sdb, and the new build re-arms root.
+  one session, so sdb turns the install away (a reset, a closed handshake, or
+  a 10 s timeout). The service releases the agent, installs over sdb, and
+  re-arms root afterwards (a self-update re-arms through the new build's own
+  start). It never installs through root with `pkgcmd`: that puts the files
+  on disk but skips the app manager, so the app gets no drawer icon and the
+  Control API answers 404 for it. If a root command is still running, the
+  install is refused with 409 `installBusy`; retry when it finishes.
 - **`/install` returns HTTP 100 / drops the socket** → the self-update path;
   the connection dies mid-swap. `app.js` (as above) brings it back; the install
   almost certainly succeeded — verify with `GET /version` (new build) and

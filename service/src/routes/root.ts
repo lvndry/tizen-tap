@@ -3,6 +3,7 @@
 // /dev/root/exec runs a line of /bin/sh as uid 0 through the connected agent,
 // and /dev/root/release hands sdbd's single client session back.
 // /dev/root/developer-ip reads or switches sdbd's Host PC IP gate, and
+// /dev/processes is the whole TV's process table by memory.
 //
 // The feature routes never arm: every arm cycle pushes an agent through sdbd,
 // and enough of them lock sdbd out, so they answer "root not connected"
@@ -107,10 +108,9 @@ function register(ctx, router) {
         }
     });
 
-    // The connected agent holds sdbd's single client session, and while it
-    // does, the installer's sdb probe finds it held and falls back to the
-    // root (pkgcmd) route, which installs but does not register the app.
-    // Releasing lets a pending install go over sdb and register properly.
+    // The connected agent holds sdbd's single client session. The installer
+    // releases it by itself when it needs sdb; this is for anything else that
+    // wants sdbd back by hand. Root stays off until POST /dev/root/arm.
     router.on.post('/dev/root/release', async (request, response) => {
         if (!gate(request, response)) return;
 
