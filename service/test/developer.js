@@ -5,7 +5,7 @@
 // out before sdbd is restarted (the restart usually kills the agent running it).
 
 const {
-    isDottedQuad, changeDeveloperIp, ensureLoopbackGate, READ_COMMAND, RESTART_COMMAND, NOT_SELF_INSTALL_WARNING
+    isDottedQuad, changeDeveloperIp, ensureLoopbackGate, READ_COMMAND, RESTART_COMMAND, HEAL_RESTART_COMMAND, NOT_SELF_INSTALL_WARNING
 } = require('../src/root/developer.ts');
 
 const results = [];
@@ -37,6 +37,7 @@ function fakeTv({ ip = '127.0.0.1', setExit = 0, readBack = null, restart = 'dro
             if (restart === 'drops') throw new Error('root channel closed');
             return { exit: 0, stdout: '', stderr: '' };
         }
+        if (command === HEAL_RESTART_COMMAND) return { exit: 0, stdout: '', stderr: '' };
         throw new Error(`unexpected command ${command}`);
     };
 
@@ -127,20 +128,22 @@ async function main() {
         const tv = fakeTv({ ip: '127.0.0.1' });
         const res = await ensureLoopbackGate({ exec: tv.exec, log: tv.log });
         check('an already-loopback gate is left alone (no set, no restart)',
-            res.changed === false && tv.timeline.length === 1 && tv.timeline.indexOf(`exec ${RESTART_COMMAND}`) === -1,
+            res.changed === false && tv.timeline.length === 1 &&
+            tv.timeline.indexOf(`exec ${RESTART_COMMAND}`) === -1 &&
+            tv.timeline.indexOf(`exec ${HEAL_RESTART_COMMAND}`) === -1,
             JSON.stringify(tv.timeline));
     }
 
     {
-        const tv = fakeTv({ ip: '192.168.1.50', restart: 'returns' });
+        const tv = fakeTv({ ip: '192.168.1.50' });
         const res = await ensureLoopbackGate({ exec: tv.exec, log: tv.log });
         const expected = [
             `exec ${READ_COMMAND}`,
             'exec buxton2ctl set-string system db/sdk/develop/ip 127.0.0.1',
             `exec ${READ_COMMAND}`,
-            `exec ${RESTART_COMMAND}`
+            `exec ${HEAL_RESTART_COMMAND}`
         ];
-        check('a non-loopback gate is set, read back, and sdbd restarted',
+        check('a non-loopback gate is set, read back, and sdbd restarted in the background',
             res.changed === true && res.before === '192.168.1.50' && res.after === '127.0.0.1' &&
             JSON.stringify(tv.timeline) === JSON.stringify(expected), JSON.stringify(tv.timeline));
     }
@@ -150,7 +153,8 @@ async function main() {
         const res = await ensureLoopbackGate({ exec: tv.exec, log: tv.log });
         check('a failed set is not reported as healed and sdbd is not restarted',
             res.changed === false && /set-string failed/.test(res.reason) &&
-            tv.timeline.indexOf(`exec ${RESTART_COMMAND}`) === -1, JSON.stringify(res));
+            tv.timeline.indexOf(`exec ${RESTART_COMMAND}`) === -1 &&
+            tv.timeline.indexOf(`exec ${HEAL_RESTART_COMMAND}`) === -1, JSON.stringify(res));
     }
 
     {
@@ -158,7 +162,8 @@ async function main() {
         const res = await ensureLoopbackGate({ exec: tv.exec, log: tv.log });
         check('a read-back that disagrees is not healed',
             res.changed === false && /read back/.test(res.reason) &&
-            tv.timeline.indexOf(`exec ${RESTART_COMMAND}`) === -1, JSON.stringify(res));
+            tv.timeline.indexOf(`exec ${RESTART_COMMAND}`) === -1 &&
+            tv.timeline.indexOf(`exec ${HEAL_RESTART_COMMAND}`) === -1, JSON.stringify(res));
     }
 
     {
