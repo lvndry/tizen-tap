@@ -126,6 +126,7 @@ module.exports = {
     adoptHandoff,
     forgetCertificates,
     clear,
+    CONFIG_DIR,
     CONFIG_PATH,
     HANDOFF_PATH,
     DEFAULTS

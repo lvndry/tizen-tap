@@ -19,7 +19,7 @@ const { ErrorCode } = require('../protocol.ts');
 const SELF_PACKAGE_ID = 'GJBBYNLkgP';
 
 function register(ctx, router) {
-    const { authorise, installer, updates, sdb, store, config, log } = ctx;
+    const { authorise, installer, updates, sdb, store, config, log, recorded } = ctx;
 
     const pkg = log.on(Facility.PKG);
     const cfg = log.on(Facility.CFG);
@@ -54,7 +54,10 @@ function register(ctx, router) {
                 sdb.release();
                 // Same as /restart: an uncaught throw reliably trips auto-restart, so the new
                 // build loads in place without a manual relaunch.
-                setTimeout(() => { throw new Error('homebrew self-update'); }, 300);
+                setTimeout(() => {
+                    recorded.recordExit('self-update');
+                    throw new Error('homebrew self-update');
+                }, 300);
             }
         } catch (error) {
             failure(response, 500, error.code || ErrorCode.INTERNAL, error.message, error.remedy);
