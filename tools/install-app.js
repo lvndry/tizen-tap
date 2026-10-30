@@ -13,6 +13,32 @@ const friendly = (message) => Object.assign(new Error(message), { isFriendly: tr
 
 const isUrl = (source) => /^https?:\/\//.test(source);
 
+const buildOf = async (host) => {
+    try {
+        const response = await fetch(`http://${host}:${PORT}/version`, { signal: AbortSignal.timeout(3000) });
+        return response.ok ? (await response.json()).build || null : null;
+    } catch (e) {
+        return null;
+    }
+};
+
+// A self-update restarts the service while it is still answering the upload, so the connection
+// drops even when the install worked. Waiting for /version tells the two apart.
+async function afterDrop(host, buildBefore, reason) {
+    for (let waited = 0; waited < 90; waited += 3) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const build = await buildOf(host);
+        if (!build) continue;
+
+        if (build !== buildBefore) return { build, updated: true };
+        return { build, updated: false };
+    }
+
+    throw friendly(`Tizen Tap stopped answering on ${host}:${PORT} (${reason}) and did not come back within 90 s.\n` +
+        '  A self-update can leave the service down until something relaunches it:\n' +
+        `  TV_IP=${host} node app.js GJBBYNLkgP.TizenHomebrew --wait ${PORT}   (samsung-tv-toolbox)`);
+}
+
 async function load(source) {
     if (!isUrl(source)) {
         try {
@@ -41,6 +67,7 @@ const main = async () => {
 
     const started = Date.now();
     const archive = await load(source);
+    const buildBefore = await buildOf(host);
 
     const response = await fetch(`http://${host}:${PORT}/install`, {
         method: 'POST',
@@ -51,20 +78,26 @@ const main = async () => {
         },
         body: archive,
         signal: AbortSignal.timeout(300000)
-    }).catch((e) => { throw friendly(`Tizen Tap did not answer on ${host}:${PORT}: ${e.message}`); });
+    }).catch((e) => e);
 
+    if (response instanceof Error) {
+        if (!buildBefore) throw friendly(`Tizen Tap did not answer on ${host}:${PORT}: ${response.message}`);
+
+        const after = await afterDrop(host, buildBefore, response.message);
+        if (after.updated) {
+            ui.ok(name, `${ui.bytes(archive.length)} · self-update: the service restarted on ${after.build}`, Date.now() - started);
+            ui.blank();
+            return;
+        }
+
+        throw friendly(`The connection dropped mid-install and the service came back on the same build (${after.build}).\n` +
+            '  The install most likely did not happen; check GET /packages, then retry.');
+    }
+
+    const refusal = async () => ((await response.clone().json().catch(() => null)) || {}).message;
     if (response.status === 403) throw friendly('The PIN was refused. The current one is on the TV screen.');
-    const retryAfter = response.headers.get('retry-after');
-    const wait = retryAfter ? `${retryAfter}s` : 'a minute';
-
-    if (response.status === 429) {
-        throw friendly(`This machine is locked out after too many wrong PINs. Wait ${wait}, then use the PIN on the TV screen.`);
-    }
-    if (response.status === 409) {
-        const busy = await response.json().catch(() => ({}));
-        const running = busy.installing && busy.installing.name ? ` (${busy.installing.name})` : '';
-        throw friendly(`Another install is running on the TV${running}. Try again in ${wait}.`);
-    }
+    if (response.status === 429) throw friendly((await refusal()) || 'Pairing is locked after too many wrong PINs.');
+    if (response.status === 409) throw friendly((await refusal()) || 'Another install is running. Retry in a moment.');
 
     const result = await response.json().catch(() => null);
 
