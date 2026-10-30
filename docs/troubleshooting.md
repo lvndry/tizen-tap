@@ -32,8 +32,8 @@ Tizen Tap is two applications in one package:
 | `GJBBYNLkgP.TizenHomebrewService` | the service on `:8091` | no (404) |
 
 The app drawer can list both. The service is named "Tizen Tap Service" and
-carries its own icon, `service-icon.png` (the same mark in slate with a gear
-badge, generated from `icon.png` by `npm run service-icon`).
+carries its own icon, `service-icon.png` (the app's T mark in a dark circle on
+yellow, where the app is a yellow T on dark).
 
 `node app.js GJBBYNLkgP.TizenHomebrew status` can report
 `running: true, visible: false` while `:8091` is dead. That answer is about
