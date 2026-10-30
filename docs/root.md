@@ -52,44 +52,53 @@ bites.
 The app sandbox can see almost nothing: its own processes, and little else.
 Root sees the whole TV.
 
-### 1. Survive the kernel's OOM killer
+### 1. See who is using the RAM, and who the OOM killer will take
 
-A mid-range TV has ~1.5 GB of RAM shared by the OS, every preinstalled
-app, and anything you install. When it runs out, the kernel picks
-processes to reap — and it picks your services. The fix, applied as root:
-
-```sh
-for p in $(ps -eo pid,comm | awk '/GJBBYNLkgP|S6K2WQ8MnP/{print $1}'); do
-  echo -900 > /proc/$p/oom_score_adj
-done
-```
-
-A score of `-900` tells the OOM killer to exhaust every other process
-before touching yours. It must be **re-applied after every process
-restart** (the value is per-process, not per-package), and `-1000` should
-be avoided — that makes a process fully unkillable, including by you.
-
-You can see the killer at work any time:
+A mid-range TV has about 1.5 GB of RAM shared by the OS, every preinstalled
+app, and anything you install. When it runs out, the kernel kills processes
+in order of `oom_score_adj`, highest first. Root can see all of it:
 
 ```sh
-dmesg | grep -iE 'oom|killed process' | tail
 grep -E 'MemTotal|MemAvailable|SwapFree' /proc/meminfo
+dmesg | grep -iE 'oom|killed process' | tail
+for p in $(ls /proc | grep -E '^[0-9]+$'); do
+  echo "$(awk '/VmRSS/{print $2}' /proc/$p/status 2>/dev/null) $(cat /proc/$p/oom_score_adj 2>/dev/null) $(cat /proc/$p/comm 2>/dev/null)"
+done | sort -rn | head -20
 ```
 
-### 2. Kill the bloat that eats RAM
+Measured on the CU7105 (Tizen 6.5), 2026-10-30:
 
-The TV runs housekeeping daemons you never asked for. The usual
-candidates, checked on the CU7105:
+| Who | RAM | `oom_score_adj` |
+| --- | --- | --- |
+| Samsung system apps (csfs, Home Media, menu, sidebar, quick launch) | 34 to 101 MB each | 200 to 360 |
+| Cached apps (TV Plus, Netflix, Prime Video, Store, HbbTV, ...) | about 150 MB together | 750 |
+| Tizen Tap and the Stremio server (UI processes) | 23 to 27 MB each | 630 to 750 |
+| Tizen Tap and Stremio services | (inside `wrt-service`) | 290 |
+| Protected daemons (bms-service, slive-provider, the root agent) | about 23 MB each | -900 |
+| Window manager, tv-viewer, loaders | | -1000 |
 
-```sh
-ps -eo pid,rss,comm | sort -rnk2 | head -20   # who's actually eating RAM
-kill $(ps -eo pid,comm | awk '/rmdemon/{print $1}')   # remote-capture daemon
-kill $(ps -eo pid,comm | awk '/newslO9NqF/{print $1}') # an app's UI process
-```
+So under pressure the kernel takes the cached apps first, and ours next.
 
-Kills are temporary — a daemon that the platform respawns comes back —
-but the running ones are exactly the ones competing with your services
-for the last hundred megabytes.
+**Raising our priority does not work on this firmware.** Writing `-900` to
+`/proc/<pid>/oom_score_adj` of an app process returns success, but the
+value does not change; the older `/proc/<pid>/oom_adj` write is refused.
+Only the writing process's own score (`/proc/self`) changes. Smack's
+`onlycap` is empty, so it is not Smack; the firmware's memory manager
+appears to own app scores. Earlier versions of this page recommended the
+write; it has no effect.
+
+### 2. The preloaded apps are not worth killing
+
+Samsung keeps Netflix, YouTube and Prime Video running in the background
+so they open instantly. On the CU7105 they hold 12 to 26 MB each, at
+`oom_score_adj` 750: they are already the first thing the kernel frees
+under pressure, so closing them buys little. `node apps.js --close` (in the
+toolbox) does it without root if you want to anyway; they come back on
+their own after a boot or a Smart Hub reset.
+
+The big users are Samsung's own system apps (`csfs` alone is about 100 MB).
+Killing those breaks the TV's own interface, and the platform respawns
+them.
 
 ### 3. Read and write the settings database
 
