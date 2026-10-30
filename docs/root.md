@@ -100,6 +100,10 @@ The big users are Samsung's own system apps (`csfs` alone is about 100 MB).
 Killing those breaks the TV's own interface, and the platform respawns
 them.
 
+Our own pages are not on that list any more: the Tizen Tap UI and the
+Stremio page exit once their service is up instead of hiding (hidden, they
+held 110 MB and 72 MB, the two largest processes on the TV).
+
 ### 3. Read and write the settings database
 
 The TV's persistent settings live in the `buxton2` database, and the

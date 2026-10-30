@@ -94,7 +94,12 @@ Probe caveats baked in (learned the hard way): the developer IP is only read
 via root exec when the root channel is connected — otherwise it reports
 `unknown`, it never guesses. sdbd serves **one client session at a time**, so
 while the root agent is armed a bare handshake probe always loses; the
-endpoint reports `ok` by construction in that case. Stremio is probed on the
+endpoint reports `ok` by construction in that case. The same holds for the
+service's own sdb connection (the 15 s device sweep keeps one open), which
+also counts as proof. Otherwise the probe dials up to three times and says
+`rejected` only when every attempt was turned away. `process: null` means
+the sandbox could not see sdbd and no root answer was available, not that
+sdbd is gone. Stremio is probed on the
 service's own LAN IPv4, not `127.0.0.1` — Tizen per-app network namespaces
 do not share loopback.
 
@@ -143,6 +148,12 @@ then `token.txt` is the key. Installing from a checkout of this repo is
 - **`listen.js` prints nothing** → this model is quiet on the
   remote channel by design. Silence is a working result, not an error. Read
   `/logs` or `/packages` instead.
+- **Installs while the root agent is connected** → the agent holds sdbd's
+  one session, so sdb turns the install away mid-handshake. The service then
+  installs the staged file as root with `pkgcmd`; the result says
+  `route: "root"`. A self-update cannot go that way (replacing the service
+  closes the root channel mid-install), so the service releases the agent,
+  installs over sdb, and the new build re-arms root.
 - **`/install` returns HTTP 100 / drops the socket** → the self-update path;
   the connection dies mid-swap. `app.js` (as above) brings it back; the install
   almost certainly succeeded — verify with `GET /version` (new build) and

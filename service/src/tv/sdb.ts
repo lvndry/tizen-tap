@@ -397,4 +397,43 @@ function withSession(options, fn) {
     });
 }
 
-module.exports = { connect, withSession, release, Session, SdbError, SDB_PORT };
+const HANDSHAKE_ATTEMPTS = 3;
+const HANDSHAKE_GAP = 500;
+
+// Whether sdbd completes a handshake, for a doctor rather than a command. sdbd serves one session at
+// a time, so the connection this service already holds is the proof, and a second socket dialed
+// beside it is turned away however healthy the daemon is. Only a failure on every attempt counts:
+// sdbd drops the odd connection for no reason at all.
+function probeHandshake(options) {
+    const opts = options || {};
+    const attempts = Math.max(1, opts.attempts || HANDSHAKE_ATTEMPTS);
+    const gap = opts.gap === undefined ? HANDSHAKE_GAP : opts.gap;
+    const timeout = opts.timeout || DEFAULT_CONNECT_TIMEOUT;
+
+    if (held && held.healthy()) return Promise.resolve({ handshake: 'ok', attempts: 0, error: null });
+
+    if (opening) {
+        return opening.then(
+            () => ({ handshake: 'ok', attempts: 0, error: null }),
+            () => probeHandshake({ ...opts, attempts })
+        );
+    }
+
+    function attempt(number) {
+        return connectOnce(opts.host || '127.0.0.1', opts.port || SDB_PORT, timeout, () => {}).then(
+            (session: any) => {
+                session.close();
+                return { handshake: 'ok', attempts: number, error: null };
+            },
+            (error) => {
+                if (error.code === 'sdbRefused') return { handshake: 'refused', attempts: number, error: error.code };
+                if (number >= attempts) return { handshake: 'rejected', attempts: number, error: error.code };
+                return wait(gap).then(() => attempt(number + 1));
+            }
+        );
+    }
+
+    return attempt(1);
+}
+
+module.exports = { connect, withSession, release, probeHandshake, Session, SdbError, SDB_PORT };

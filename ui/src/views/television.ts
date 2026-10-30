@@ -219,7 +219,6 @@ function deck(state) {
         <div class="deck">
           ${button('restart', state.restarting ? 'restarting…' : 'restart service')}
           ${button('logs', 'show logs')}
-          ${button('theme', state.themeOn ? 'theme · on' : 'theme · off')}
           ${button('credits', 'credits')}
           ${button('exit', 'exit')}
         </div>

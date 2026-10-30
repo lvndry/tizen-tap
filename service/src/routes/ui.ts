@@ -16,8 +16,7 @@ const TYPES = {
     '.html': 'text/html',
     '.js': 'application/javascript',
     '.css': 'text/css',
-    '.png': 'image/png',
-    '.wav': 'audio/wav'
+    '.png': 'image/png'
 };
 
 function TEXTUAL(type) {

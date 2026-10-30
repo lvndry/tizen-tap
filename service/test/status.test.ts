@@ -8,7 +8,7 @@
 const { test, expect } = require('bun:test');
 const {
     diagnose, parseBuxton2, buildStatus, noteArmError, realScanProc, realStremio,
-    parseMeminfo, parseOomKills, OOM_DMESG_COMMAND, STREMIO_PKG_IDS
+    parseMeminfo, parseOomKills, OOM_DMESG_COMMAND, STREMIO_PKG_IDS, SDBD_PIDOF_COMMAND
 } = require('../src/routes/status.ts');
 const { noteLaunch, recentLaunches, clearLaunches, LAUNCH_RING_CAP } = require('../src/launches.ts');
 
@@ -561,12 +561,30 @@ test('buildStatus: every probe starts before the slowest one resolves', async ()
 
 test('realScanProc: the root pidof answer ORs into the sandboxed scan', async () => {
     // The dev machine's /proc has no sdbd, so only the root tier can turn this true.
-    expect(await realScanProc(null)).toBe(false);
     expect(await realScanProc(async () => 'yes\n')).toBe(true);
     expect(await realScanProc(async () => 'no\n')).toBe(false);
+});
+
+test('realScanProc: a process the sandbox cannot see is unknown, not absent', async () => {
+    // On the TV the sandbox never sees sdbd, so false here was a false alarm.
+    expect(await realScanProc(null)).toBe(null);
 
     const wedged = async () => { throw new Error('channel down'); };
-    expect(await realScanProc(wedged)).toBe(false);
+    expect(await realScanProc(wedged)).toBe(null);
+
+    // "unknown" contains "no"; a firmware without pidof must not read as sdbd gone.
+    expect(await realScanProc(async () => 'unknown\n')).toBe(null);
+});
+
+test('realScanProc: the root command carries no backslash', () => {
+    expect(SDBD_PIDOF_COMMAND.indexOf('\\')).toBe(-1);
+});
+
+test('diagnose: an unknown sdbd process with a working handshake is healthy', () => {
+    const state = healthy();
+    state.sdbd.process = null;
+
+    expect(diagnose(state)).toBe('Everything looks healthy.');
 });
 
 test('realStremio: probes the injected host and port, not hardcoded loopback', async () => {
