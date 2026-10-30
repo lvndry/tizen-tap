@@ -5,7 +5,7 @@
 // out before sdbd is restarted (the restart usually kills the agent running it).
 
 const {
-    isDottedQuad, changeDeveloperIp, READ_COMMAND, RESTART_COMMAND, NOT_SELF_INSTALL_WARNING
+    isDottedQuad, changeDeveloperIp, ensureLoopbackGate, READ_COMMAND, RESTART_COMMAND, NOT_SELF_INSTALL_WARNING
 } = require('../src/root/developer.ts');
 
 const results = [];
@@ -121,6 +121,52 @@ async function main() {
         check('an exec that fails outright answers once, with the error',
             tv.responses.length === 1 && tv.responses[0].body.ok === false && /not connected/.test(tv.responses[0].body.error),
             JSON.stringify(tv.responses));
+    }
+
+    {
+        const tv = fakeTv({ ip: '127.0.0.1' });
+        const res = await ensureLoopbackGate({ exec: tv.exec, log: tv.log });
+        check('an already-loopback gate is left alone (no set, no restart)',
+            res.changed === false && tv.timeline.length === 1 && tv.timeline.indexOf(`exec ${RESTART_COMMAND}`) === -1,
+            JSON.stringify(tv.timeline));
+    }
+
+    {
+        const tv = fakeTv({ ip: '192.168.1.50', restart: 'returns' });
+        const res = await ensureLoopbackGate({ exec: tv.exec, log: tv.log });
+        const expected = [
+            `exec ${READ_COMMAND}`,
+            'exec buxton2ctl set-string system db/sdk/develop/ip 127.0.0.1',
+            `exec ${READ_COMMAND}`,
+            `exec ${RESTART_COMMAND}`
+        ];
+        check('a non-loopback gate is set, read back, and sdbd restarted',
+            res.changed === true && res.before === '192.168.1.50' && res.after === '127.0.0.1' &&
+            JSON.stringify(tv.timeline) === JSON.stringify(expected), JSON.stringify(tv.timeline));
+    }
+
+    {
+        const tv = fakeTv({ ip: '192.168.1.50', setExit: 1 });
+        const res = await ensureLoopbackGate({ exec: tv.exec, log: tv.log });
+        check('a failed set is not reported as healed and sdbd is not restarted',
+            res.changed === false && /set-string failed/.test(res.reason) &&
+            tv.timeline.indexOf(`exec ${RESTART_COMMAND}`) === -1, JSON.stringify(res));
+    }
+
+    {
+        const tv = fakeTv({ ip: '192.168.1.50', readBack: '0.0.0.0' });
+        const res = await ensureLoopbackGate({ exec: tv.exec, log: tv.log });
+        check('a read-back that disagrees is not healed',
+            res.changed === false && /read back/.test(res.reason) &&
+            tv.timeline.indexOf(`exec ${RESTART_COMMAND}`) === -1, JSON.stringify(res));
+    }
+
+    {
+        const tv = fakeTv();
+        const failing = async () => { throw new Error('root channel is not connected'); };
+        const res = await ensureLoopbackGate({ exec: failing, log: tv.log });
+        check('an exec that fails outright is reported unreadable and left alone',
+            res.changed === false && /unreadable/.test(res.reason), JSON.stringify(res));
     }
 }
 

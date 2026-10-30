@@ -206,3 +206,40 @@ handshake.
 Leave it at `127.0.0.1`. Flip to the Mac only for the rare
 bootstrap/root session, and flip back. sdbd is wedged by long
 handshake-drop storms; a standby off/on (not just a retry) recovers it.
+
+## The gate is the authorization, and it is frozen at loopback
+
+The most surprising thing about sdbd, once you have it under a glass, is that
+the "Host PC IP" gate is not a convenience filter in front of a key check.
+There is no per-connection key challenge: sdbd accepts the TCP connection, and
+then accepts or drops the handshake based on whether the client's source
+address equals the configured developer IP. The RSA-2048 pair in
+`vendor/root-arm/` is a build-time signature on the root tar, not a runtime
+handshake credential.
+
+So the gate is the auth, and it accepts exactly one source address. That rules
+out the obvious "fix" for the IP-flipping — `0.0.0.0` — on two counts: it is
+sdbd's *unset* value, and on the firmware where it behaves as a wildcard it
+promotes every device on the LAN (phones, guests, IoT) to a uid-0 shell on a
+box that holds the app-privacy data.
+
+The policy instead:
+
+- The gate is **frozen at `127.0.0.1`**. A cold boot resets it there anyway;
+  the TV's dialog is the only thing that moves it, and the service now
+  treats that as a bug to heal. `ensureLoopbackGate` in `root/developer.ts`
+  runs at every successful arm: if the gate reads anything other than
+  `127.0.0.1`, it writes the loopback value back, verifies the read-back, and
+  restarts sdbd. The dialog is retired.
+- **The Mac never dials 26101.** With the gate at loopback a LAN client is
+  correctly reset. Everything the operator needs goes through the service's
+  `:8091` control plane instead: `/dev/root/exec` for root commands (this is
+  what has real output), `/install` for wgt bytes, `/dev/root/arm` and
+  `/dev/root/release` for the channel. `/dev/sdb` still forwards a line over
+  the service's own loopback sdb, but sdbd's subshell output does not
+  round-trip, so it reports `ok` with an empty body.
+
+Live proof (2026-10-30, CU7105): with the gate at `127.0.0.1`, the Mac's
+direct sdb dial to 26101 is reset, while the same box's root channel —
+injected over loopback and dialed back on `:8092` — answers `id` with
+`uid=0`.

@@ -396,8 +396,29 @@ function start() {
     // Arm root once the sdb probe has settled: stage the payloads, fire the
     // injection, and let the agent dial back in. Idempotent, so a failed
     // attempt is retried a few times; /dev/root/arm remains manual after.
+    //
+    // The sdbd gate is the authorization: it accepts exactly one source
+    // address, and a cold boot or the TV's own dialog can leave it pointing
+    // somewhere other than loopback. Once root is in, heal it back to
+    // 127.0.0.1 so the loopback install and arm paths keep working and the
+    // dialog is never needed again.
     if (device.onTv) {
+        const developer = require('./root/developer.ts');
+        let gateEnsured = false;
         setTimeout(() => {
+            function ensureLoopbackGate() {
+                if (gateEnsured) return;
+                gateEnsured = true;
+                developer.ensureLoopbackGate({
+                    exec: (command, timeoutMs) => root.channel.exec(command, timeoutMs),
+                    log: (line) => svc.info(line)
+                }).catch((error) => svc.warn(`loopback gate: ${error.message}`))
+                    .then(() => {
+                        // A self-heal restarts sdbd, which takes the channel
+                        // with it; the gate is loopback now, so re-arm once.
+                        setTimeout(() => tryArm(2), 20000);
+                    });
+            }
             function tryArm(attemptsLeft) {
                 if (root.channel.status().root) return;
 
@@ -405,6 +426,7 @@ function start() {
                 rootArm.arm(sdb, root.channel, (line) => svc.info(line)).then(() => {
                     root.arming = false;
                     status.noteArmError(null);
+                    ensureLoopbackGate();
                 }).catch((error) => {
                     root.arming = false;
                     status.noteArmError(error.message);
