@@ -84,12 +84,13 @@ session its injection opened, so while it is connected every other client
 (an install, a status probe) is closed mid-handshake or reset. Killing the
 agent frees sdbd for the very next client. Two consequences in the service:
 
-- `POST /install` keeps sdb as its route, and when sdb turns it away with a
-  connected root channel it installs the staged package as root with
-  `/usr/bin/pkgcmd -i -t wgt -p <staged path>`. A self-update is the
-  exception: it would kill the service, close the channel and take the agent
-  (and pkgcmd) down mid-install, so the agent is released first and the
-  update goes over sdb.
+- `POST /install` always installs over sdb. When sdb turns it away with a
+  connected root channel, the service releases the agent, installs, and
+  re-arms root afterwards (a self-update re-arms through the new build's own
+  start). Installing through root with `pkgcmd -i` instead was tried and
+  dropped: it writes the package and its database entry but skips the app
+  manager registration that sdb's `vd_appinstall` does, so a new app had no
+  drawer icon and the Control API answered 404 for it (seen on a CU7105).
 - `GET /dev/status` treats the connection the service already holds, or a
   connected root channel, as proof the handshake works, and only reports a
   rejection that repeats over several attempts.

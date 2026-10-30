@@ -64,7 +64,7 @@ function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createInstaller({ sdb, device, config, resigner, store, log, rootChannel = null as any }) {
+function createInstaller({ sdb, device, config, resigner, store, log, rootChannel = null as any, rearmRoot = null as any }) {
     const say = log ? log.on('pkg') : QUIET;
     const sdbSays = log ? log.on('sdb') : QUIET;
 
@@ -110,7 +110,7 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
 
             if (state.onTv && !state.ready && rootHoldsSdbd(state.sdbError, PROBE_HELD_BY_ANOTHER_SESSION)) {
                 say.info('sdb is turning clients away while the root agent holds its session; ' +
-                    'the install will fall back to root if sdb still refuses');
+                    'the install will release it and go over sdb');
             } else if (state.onTv && !state.ready) {
                 // The remedy comes after the fault and only as the thing that would explain it.
                 throw refuse(
@@ -211,97 +211,84 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
             });
         };
 
-        // pkgcmd updates in place, so there is no uninstall step to mirror.
-        const overRoot = async (carried) => {
-            say.info(`root: ${installer.rootCommand(carried.stagedPath)}`);
-
-            const verdict = await installer.runAsRoot(rootChannel, carried.stagedPath, carried.identity.packageId);
-            const lines = verdict.output.trim().split('\n');
-
-            say.info(`pkgcmd: ${lines[lines.length - 1]}`);
-        };
-
-        // Replacing this package kills the service mid-install, which closes the root channel under
-        // pkgcmd, and nothing guarantees pkgcmd outlives the agent it runs under: a half-written
-        // install of the service itself is the one failure nobody can repair over the network. sdb
-        // carries it instead, once the agent has given its session back; the new build re-arms root.
-        const selfUpdateOverSdb = async (carried, refusal) => {
-            if (rootChannel.busy) {
-                throw refuse('sdbUnreachable',
-                    'sdb is turning clients away while the root agent holds its session ' +
-                    `(${refusal.code}), and a root command is still running. A self-update cannot go ` +
-                    'through root, because replacing the service closes the root channel mid-install. ' +
-                    'Retry once the root channel is idle.');
+        // A self-update installs in place: sdbd overwrites the files, and the caller then exits
+        // abnormally so auto-restart loads the new build. Uninstalling first would drop the
+        // connection, because this process runs out of the package being removed. Only a refusal
+        // that is not sdbd being held falls back to uninstall-then-install.
+        const installOverSdb = async (carried, isSelf) => {
+            if (isSelf) {
+                try {
+                    return await inPlaceOverSdb(carried);
+                } catch (error) {
+                    if (rootHoldsSdbd(error.code)) throw error;
+                    sdbSays.info(`in place refused (${error.code || 'install failed'}), uninstalling the old copy first`);
+                }
             }
 
-            say.warn('releasing the root agent so sdb can carry the self-update; the new build re-arms root');
+            return replaceOverSdb(carried);
+        };
+
+        // The connected root agent holds sdbd's single client session. Installing through root
+        // instead (pkgcmd) puts a package on disk without registering it with the app manager: no
+        // drawer icon, and the Control API cannot launch it (seen on a CU7105). So every install
+        // goes over sdb, once the agent has given its session back. A self-update re-arms through
+        // the new build's own start; anything else re-arms here, after the install.
+        const releaseAndInstall = async (carried, refusal, isSelf) => {
+            if (rootChannel.busy) {
+                throw refuse('installBusy',
+                    'sdb is turning clients away while the root agent holds its session ' +
+                    `(${refusal.code}), and a root command is still running, so the agent cannot be ` +
+                    'released yet. Retry once the root channel is idle.');
+            }
+
+            say.warn(`releasing the root agent so sdb can carry the install (${refusal.code})`);
             await rootChannel.release();
             await wait(SDBD_SETTLE_MS);
 
             try {
-                await inPlaceOverSdb(carried);
+                await installOverSdb(carried, isSelf);
             } catch (error) {
                 if (!HELD_BY_ANOTHER_SESSION[error.code]) throw error;
 
                 throw refuse('sdbUnreachable',
-                    `sdb still turned the self-update away (${error.code}) after the root agent was ` +
+                    `sdb still turned the install away (${error.code}) after the root agent was ` +
                     'released, so nothing was installed. POST /dev/root/arm brings root back; retry the ' +
                     'install once sdb answers.');
             }
+
+            say.info('installed over sdb after releasing the root agent');
+
+            if (!isSelf && rearmRoot) {
+                Promise.resolve().then(rearmRoot).then(
+                    () => say.info('root re-armed after the install'),
+                    (error) => say.warn(`could not re-arm root after the install: ${error.message}`)
+                );
+            }
+
+            return { ...carried, route: 'sdb' };
         };
 
         const runInstaller = async (carried) => {
-            const { packageId } = carried.identity;
-            const isSelf = packageId === SELF_PACKAGE_ID;
+            const isSelf = carried.identity.packageId === SELF_PACKAGE_ID;
 
             phase('installing', carried.identity.name || carried.identity.packageId);
 
-            // The probe already saw sdb held by the root agent, so sdb is not tried at all: a second
-            // attempt would hang the same way, and root is only safe while nothing went over sdb.
+            // The probe already saw sdb held, so it is not tried again before the release: a second
+            // attempt would hang the same way.
             const { state } = carried;
             if (state && state.onTv && !state.ready && rootHoldsSdbd(state.sdbError, PROBE_HELD_BY_ANOTHER_SESSION)) {
-                sdbSays.warn(`sdb was held by the root agent at the probe (${state.sdbError}); not trying it again`);
-
-                if (isSelf) {
-                    await selfUpdateOverSdb(carried, { code: state.sdbError });
-                    say.info('installed over sdb after releasing the root agent');
-                    return { ...carried, route: 'sdb' };
-                }
-
-                await overRoot(carried);
-                return { ...carried, route: 'root' };
+                sdbSays.warn(`sdb was held by the root agent at the probe (${state.sdbError})`);
+                return releaseAndInstall(carried, { code: state.sdbError }, isSelf);
             }
 
             try {
-                // A self-update installs in place: sdbd overwrites the files, and the
-                // caller then exits abnormally so auto-restart loads the new build.
-                // Uninstalling first would drop the connection: this process runs out
-                // of the package being removed, and the install never lands.
-                if (isSelf) {
-                    try {
-                        await inPlaceOverSdb(carried);
-                        return { ...carried, route: 'sdb' };
-                    } catch (error) {
-                        if (rootHoldsSdbd(error.code)) throw error;
-                        sdbSays.info(`in place refused (${error.code || 'install failed'}), uninstalling the old copy first`);
-                    }
-                }
-
-                await replaceOverSdb(carried);
+                await installOverSdb(carried, isSelf);
                 return { ...carried, route: 'sdb' };
             } catch (error) {
                 if (!rootHoldsSdbd(error.code)) throw error;
 
                 sdbSays.warn(`sdb refused the install (${error.code}) while the root agent holds its session`);
-
-                if (isSelf) {
-                    await selfUpdateOverSdb(carried, error);
-                    say.info('installed over sdb after releasing the root agent');
-                    return { ...carried, route: 'sdb' };
-                }
-
-                await overRoot(carried);
-                return { ...carried, route: 'root' };
+                return releaseAndInstall(carried, error, isSelf);
             }
         };
 
