@@ -131,7 +131,7 @@ If `:8091` stops answering, see [docs/troubleshooting.md](docs/troubleshooting.m
 Related: [stremio/README.md](stremio/README.md) sets up the TV's streaming
 server in about five minutes. [samsung-tv-toolbox](https://github.com/lvndry/samsung-tv-toolbox)
 holds the Node scripts you run on your own machine: pairing, remote keys,
-Wake-on-LAN, Developer Mode setup, and sdb from a laptop.
+Wake-on-LAN, app launching, and sdb from a laptop.
 
 ### What to install
 
