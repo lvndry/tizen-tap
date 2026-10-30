@@ -31,6 +31,10 @@ Tizen Tap is two applications in one package:
 | `GJBBYNLkgP.TizenHomebrew` | the UI, the page on screen | yes |
 | `GJBBYNLkgP.TizenHomebrewService` | the service on `:8091` | no (404) |
 
+The app drawer can list both. The service is named "Tizen Tap Service" and
+carries its own icon, `service-icon.png` (the app's T mark in a dark circle on
+yellow, where the app is a yellow T on dark).
+
 `node app.js GJBBYNLkgP.TizenHomebrew status` can report
 `running: true, visible: false` while `:8091` is dead. That answer is about
 the UI, not the service. Do not trust `visible` either: on the CU7105 it
@@ -57,6 +61,12 @@ node apps.js --close
 ```
 
 This is safe. They start normally the next time someone opens them.
+
+Our own pages do not stay behind. Hidden, the Tizen Tap UI held 110 MB and
+the Stremio server's page 72 MB on the CU7105, more than any Samsung
+process. So the Stremio page exits as soon as it has started its service,
+and the Tizen Tap UI exits 4 s after the service answers unless someone
+pressed a key on the remote. Both services keep running without them.
 
 On the CU7105 an earlier `GET /dev/status` showed memory pressure as
 critical: about 207 MB free of 1578 MB, with swap exhausted. That is the

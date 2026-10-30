@@ -5,7 +5,6 @@ import { readPackage } from './core/package.ts';
 import { connect, upload } from './core/socket.ts';
 import { remembered, remember, forget, DIGITS } from './core/pairing.ts';
 import { mount, delegate } from './core/view.ts';
-import { theme } from './scene/theme.ts';
 import { masthead, pairing, status, tabs, panel, outcome } from './views/screens.ts';
 
 const Send = {
@@ -84,13 +83,7 @@ const store = createStore({
     phase: null,
     phaseDetail: null,
     done: null,
-    error: null,
-
-    themeOn: false
-});
-const channel = theme({
-    defaultOn: false,
-    onState: ({ playing }) => store.update({ themeOn: playing })
+    error: null
 });
 
 const { send } = connect({
@@ -319,9 +312,7 @@ delegate({
         send(Send.relayExec, { id: String(Date.now()), command });
 
         (document.getElementById('cmd') as HTMLInputElement).value = '';
-    },
-
-    theme: () => channel.toggle()
+    }
 });
 
 ['dragover', 'drop'].forEach((name) => document.addEventListener(name, (event) => {

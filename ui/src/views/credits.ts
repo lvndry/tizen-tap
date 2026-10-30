@@ -14,9 +14,9 @@ const CREDITS = [
     { name: 'TizenBrew Installer', by: 'reisxd', at: 'github.com/reisxd/TizenBrewInstaller' },
     { name: 'tizen.js', by: 'reisxd', at: 'github.com/reisxd/tizen.js' },
 
-    { head: 'Artwork and sound' },
+    { head: 'Artwork' },
     { name: 'The Homebrew Channel', by: 'fail0verflow', at: 'github.com/fail0verflow/hbc' },
-    { note: 'The sea, the rays, the bubbles, the glass and the banner music are all its own.' },
+    { note: 'The sea, the rays, the bubbles and the glass are all its own.' },
     { name: 'Make Aero', by: 'Visnalize', at: 'github.com/visnalize/makeaero' },
     { note: 'The Frutiger Aero gloss every pane and button is finished with.' },
 

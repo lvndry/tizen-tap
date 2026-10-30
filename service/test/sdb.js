@@ -365,6 +365,62 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
         clearInterval(chatter);
     });
 
+    // sdbd serves one session at a time: while one is open it turns every other client away.
+    {
+        let dialed = 0;
+        let open = null;
+        const oneAtATime = (socket) => {
+            dialed += 1;
+            if (open && !open.destroyed) return socket.destroy();
+            open = socket;
+            wellBehaved('ok\n')(socket);
+        };
+
+        await against(oneAtATime, async (port) => {
+            await sdb.withSession({ port, timeout: 2000 }, (session) => session.exec('shell:0 one', { timeout: 2000 }));
+            const before = dialed;
+            const probe = await sdb.probeHandshake({ port, timeout: 2000, gap: 10 });
+
+            check('the handshake probe counts the connection already held as proof and dials nothing beside it',
+                probe.handshake === 'ok' && probe.attempts === 0 && dialed === before,
+                `${JSON.stringify(probe)}, dialed ${dialed - before}`);
+
+            sdb.release();
+        });
+    }
+
+    {
+        let dialed = 0;
+        await against((socket) => {
+            dialed += 1;
+            if (dialed === 1) return socket.destroy();
+            daemon()(socket);
+        }, async (port) => {
+            const probe = await sdb.probeHandshake({ port, timeout: 2000, gap: 10 });
+
+            check('one dropped handshake is not a rejection when the next attempt completes',
+                probe.handshake === 'ok' && probe.attempts === 2, JSON.stringify(probe));
+        });
+    }
+
+    await against((socket) => socket.destroy(), async (port) => {
+        const probe = await sdb.probeHandshake({ port, timeout: 2000, gap: 10 });
+
+        check('a handshake dropped on every attempt is a rejection',
+            probe.handshake === 'rejected' && probe.attempts === 3 && /^sdb(Closed|Reset)$/.test(probe.error), JSON.stringify(probe));
+    });
+
+    {
+        const server = await listen(() => {});
+        const { port } = server.address();
+        await shut(server);
+
+        const probe = await sdb.probeHandshake({ port, timeout: 2000, gap: 10 });
+
+        check('nothing listening is refused, on the first attempt',
+            probe.handshake === 'refused' && probe.attempts === 1, JSON.stringify(probe));
+    }
+
     const failed = results.filter((r) => !r).length;
     console.log(`\n${results.length - failed}/${results.length} checks passed.`);
     process.exit(failed ? 1 : 0);

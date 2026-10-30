@@ -256,6 +256,162 @@ const run = async () => {
             phases.indexOf('installing') === -1, phases.join(' → '));
     }
 
+    // sdbd serves one session at a time and the root agent holds one, so with the channel
+    // connected sdb turns every other client away mid-handshake.
+    const heldSdb = (succeedAfter = Infinity) => {
+        const calls = { count: 0, commands: [] };
+        return {
+            calls,
+            withSession: (_options, run) => {
+                calls.count += 1;
+                if (calls.count <= succeedAfter) {
+                    return Promise.reject(Object.assign(new Error('127.0.0.1:26101 closed the connection before the ADB handshake completed.'), { code: 'sdbClosed' }));
+                }
+                return run({
+                    exec: (command) => {
+                        calls.commands.push(command);
+                        return Promise.resolve('coreinstall spend time = 1234 ms');
+                    },
+                    close: () => {}
+                });
+            }
+        };
+    };
+
+    const PKGCMD_OK = '__return_cb req_id[1] pkg_type[wgt] pkgid[ACME000001] key[start] val[install]\n' +
+        '__return_cb req_id[1] pkg_type[wgt] pkgid[ACME000001] key[end] val[ok]\n' +
+        'spend time for pkgcmd is [2210]ms\n';
+
+    const fakeChannel = ({ root = true, busy = false, result = { exit: 0, timedOut: false, stdout: PKGCMD_OK, stderr: '' } } = {}) => {
+        const seen = { commands: [], released: 0 };
+        return {
+            seen,
+            busy,
+            status: () => ({ root }),
+            exec: (command) => { seen.commands.push(command); return Promise.resolve(result); },
+            release: () => { seen.released += 1; return Promise.resolve(); }
+        };
+    };
+
+    const otherConfig = Buffer.from(readFileSync(join(__dirname, '..', '..', 'config.xml')).toString('utf8').replace(/GJBBYNLkgP/g, 'ACME000001'));
+    const otherUpload = () => fixture.zipAll([
+        { name: 'config.xml', contents: otherConfig, deflate: true },
+        { name: 'icon.png', contents: fixture.PIXEL }
+    ]);
+
+    {
+        const store = createStore({ installing: false, catalog: [] });
+        const { install } = createInstaller({
+            sdb: fakeSdb(), device: fakeDevice(), config: fakeConfig({ author: 'present' }),
+            resigner: fakeResigner, store, rootChannel: fakeChannel()
+        });
+
+        const outcome = await install({ source: 'upload', upload: otherUpload() });
+        check('an install sdb carries reports the sdb route', outcome.route === 'sdb', JSON.stringify(outcome));
+    }
+
+    {
+        const store = createStore({ installing: false, catalog: [] });
+        const channel = fakeChannel();
+        const { install } = createInstaller({
+            sdb: heldSdb(), config: fakeConfig({ author: 'present' }), resigner: fakeResigner, store,
+            device: fakeDevice({ ready: false, reason: 'sdbUnreachable', sdbError: 'sdbClosed' }),
+            rootChannel: channel
+        });
+
+        const outcome = await install({ source: 'upload', upload: otherUpload() }).catch((e) => e);
+        check('with the root agent holding sdbd, the probe does not refuse and the install goes through root',
+            outcome.route === 'root' && outcome.packageId === 'ACME000001', JSON.stringify(outcome));
+        check('through pkgcmd, on the staged file',
+            channel.seen.commands.length === 1 &&
+            channel.seen.commands[0] === '/usr/bin/pkgcmd -i -t wgt -p /home/owner/share/tmp/sdk_tools/package.wgt',
+            JSON.stringify(channel.seen.commands));
+    }
+
+    {
+        const store = createStore({ installing: false, catalog: [] });
+        const { install } = createInstaller({
+            sdb: heldSdb(), device: fakeDevice(), config: fakeConfig({ author: 'present' }),
+            resigner: fakeResigner, store, rootChannel: fakeChannel({ root: false })
+        });
+
+        const refused = await install({ source: 'upload', upload: otherUpload() }).catch((e) => e);
+        check('without a root channel a handshake rejection is the error, not a root install',
+            refused.code === 'sdbClosed', String(refused.code));
+    }
+
+    {
+        const store = createStore({ installing: false, catalog: [] });
+        const failing = '__return_cb req_id[1] pkg_type[wgt] pkgid[ACME000001] key[error] val[-12:signature invalid]\n' +
+            '__return_cb req_id[1] pkg_type[wgt] pkgid[ACME000001] key[end] val[fail]\n';
+        const { install } = createInstaller({
+            sdb: heldSdb(), device: fakeDevice(), config: fakeConfig({ author: 'present' }), resigner: fakeResigner, store,
+            rootChannel: fakeChannel({ result: { exit: 1, timedOut: false, stdout: failing, stderr: '' } })
+        });
+
+        const refused = await install({ source: 'upload', upload: otherUpload() }).catch((e) => e);
+        check('a pkgcmd refusal is a failed install carrying pkgcmd\'s own words',
+            refused.code === 'installFailed' && /val\[-12:signature invalid\]/.test(refused.message), `${refused.code}: ${refused.message}`);
+    }
+
+    {
+        const store = createStore({ installing: false, catalog: [] });
+        const sdb = heldSdb(1);
+        const channel = fakeChannel();
+        const { install } = createInstaller({
+            sdb, device: fakeDevice(), config: fakeConfig({ author: 'present' }), resigner: fakeResigner, store,
+            rootChannel: channel
+        });
+
+        const outcome = await install({ source: 'upload', upload: fixture.wgtWithIcon() }).catch((e) => e);
+        check('a self-update never goes through root: the agent is released and sdb carries it in place',
+            outcome.route === 'sdb' && channel.seen.released === 1 && channel.seen.commands.length === 0 &&
+            sdb.calls.commands.length === 1 && sdb.calls.commands[0].includes('vd_appinstall GJBBYNLkgP') &&
+            !sdb.calls.commands.some((c) => c.includes('vd_appuninstall')),
+            JSON.stringify({ outcome, channel: channel.seen, sdb: sdb.calls }));
+    }
+
+    {
+        const store = createStore({ installing: false, catalog: [] });
+        const channel = fakeChannel({ busy: true });
+        const { install } = createInstaller({
+            sdb: heldSdb(), device: fakeDevice(), config: fakeConfig({ author: 'present' }), resigner: fakeResigner, store,
+            rootChannel: channel
+        });
+
+        const refused = await install({ source: 'upload', upload: fixture.wgtWithIcon() }).catch((e) => e);
+        check('a self-update while a root command runs is refused with a retry hint, root left alone',
+            refused.code === 'sdbUnreachable' && /Retry once the root channel is idle/.test(refused.message) &&
+            channel.seen.released === 0 && channel.seen.commands.length === 0,
+            `${refused.code}: ${refused.message}`);
+    }
+
+    {
+        const command = installer.rootCommand('/home/owner/share/tmp/sdk_tools/package.wgt');
+        check('the root install command carries no backslash', command.indexOf('\\') === -1, command);
+        check('and names the package type from the staged file',
+            installer.rootCommand('/home/owner/share/tmp/sdk_tools/package.tpk').includes('-t tpk'), command);
+
+        const silent = (() => {
+            try { installer.interpretPkgcmd({ exit: 0, timedOut: false, stdout: 'spend time for pkgcmd is [9]ms\n', stderr: '' }, {}); return null; }
+            catch (error) { return error; }
+        })();
+        check('pkgcmd output without an end event is not taken as success',
+            silent && silent.code === 'installFailed' && /neither success nor failure/.test(silent.message), String(silent && silent.message));
+
+        const author = (() => {
+            try {
+                installer.interpretPkgcmd({
+                    exit: 1, timedOut: false, stderr: '',
+                    stdout: 'key[error] val[-11:Author certificate not match]\nkey[end] val[fail]\n'
+                }, { packageId: 'ACME000001' });
+                return null;
+            } catch (error) { return error; }
+        })();
+        check('a pkgcmd failure the sdb installer also knows keeps its specific code',
+            author && author.code === 'authorMismatch', String(author && author.code));
+    }
+
     installer.stage = realStage;
 
     const failed = results.filter((ok) => !ok).length;
