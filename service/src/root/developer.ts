@@ -21,6 +21,53 @@ const RESTART_NOTE = 'sdbd is restarting to load the new value. The root agent r
 const NOT_SELF_INSTALL_WARNING = `The Host PC IP is no longer ${SELF_INSTALL_IP}: this TV cannot install its own ` +
     `apps until it is set back to ${SELF_INSTALL_IP}.`;
 
+// The gate is frozen at the loopback address. sdbd has no per-connection key
+// challenge: the developer IP equality check IS the authorization, and it
+// accepts exactly one source address. The service's root arm dials sdbd over
+// loopback, so the gate must stay at 127.0.0.1 or the service cannot install
+// its own apps or re-arm root. A cold boot resets the key to 127.0.0.1 anyway,
+// but the TV's dialog writes whatever address was in it before, so the value
+// is not trustworthy. Self-healing it at boot makes the dialog optional.
+//
+// 0.0.0.0 is deliberately not used: it is sdbd's "unset" value, and on the
+// firmware where it acts as a wildcard it would let every device on the LAN
+// — phones, guests, IoT — through a gate that otherwise hands out uid 0.
+async function ensureLoopbackGate({ exec, log }) {
+    let current;
+
+    try {
+        current = await readDeveloperIp(exec);
+    } catch (error) {
+        log(`loopback gate: could not read the developer ip (${error.message}); left alone`);
+        return { changed: false, reason: `unreadable: ${error.message}` };
+    }
+
+    if (current === SELF_INSTALL_IP) return { changed: false };
+
+    try {
+        const set = await exec(`buxton2ctl set-string system ${DEVELOPER_IP_KEY} ${SELF_INSTALL_IP}`);
+        if (set.exit !== 0) throw new Error(`buxton2ctl set-string failed (exit ${set.exit}): ${set.stderr.trim()}`);
+
+        const after = await readDeveloperIp(exec);
+        if (after !== SELF_INSTALL_IP) throw new Error(`wrote ${SELF_INSTALL_IP} but read back ${after}`);
+
+        noteDeveloperIp(after);
+        log(`loopback gate: self-healed ${current} -> ${SELF_INSTALL_IP}; restarting sdbd (the root channel will likely drop)`);
+    } catch (error) {
+        log(`loopback gate: self-heal to ${SELF_INSTALL_IP} failed (${error.message}); left at ${current}`);
+        return { changed: false, reason: error.message };
+    }
+
+    try {
+        const restart = await exec(RESTART_COMMAND, RESTART_TIMEOUT_MS);
+        log(`loopback gate: systemctl restart sdbd exited ${restart.exit}${restart.stderr ? `: ${restart.stderr.trim()}` : ''}`);
+    } catch (error) {
+        log(`loopback gate: sdbd restart took the root channel with it (${error.message}), as expected`);
+    }
+
+    return { changed: true, before: current, after: SELF_INSTALL_IP };
+}
+
 // Strict: four decimal octets, 0-255, no leading zeros (a zero-padded octet
 // is read as octal by some parsers, so it is ambiguous, not merely untidy).
 function isDottedQuad(value) {
@@ -85,6 +132,6 @@ async function changeDeveloperIp({ exec, ip, respond, log }) {
 }
 
 module.exports = {
-    isDottedQuad, readDeveloperIp, changeDeveloperIp,
+        isDottedQuad, readDeveloperIp, changeDeveloperIp, ensureLoopbackGate,
     READ_COMMAND, RESTART_COMMAND, SELF_INSTALL_IP, NOT_SELF_INSTALL_WARNING
 };
