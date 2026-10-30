@@ -425,8 +425,14 @@ function start() {
                     });
             }
             function tryArm(attemptsLeft) {
-                if (root.channel.status().root) return;
-
+                if (root.channel.status().root) {
+                    // The root agent lives under sdbd, so it survives a tizen-tap
+                    // restart. A fresh process reconnects to it and would
+                    // otherwise return here without ever healing the gate —
+                    // which is exactly the case the self-heal exists for.
+                    ensureLoopbackGate();
+                    return;
+                }
                 root.arming = true;
                 rootArm.arm(sdb, root.channel, (line) => svc.info(line)).then(() => {
                     root.arming = false;
