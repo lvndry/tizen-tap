@@ -70,7 +70,7 @@ revive attempt (search for `stremio`).
 | --- | --- |
 | `main.js` | Service entry: pins the port, data dir, cache cap, then loads the server bundle |
 | `src/server.js` | Stremio's official desktop server bundle (v4.21.2), unmodified |
-| `index.html` | Page that starts the service via `launchAppControl` and hides itself |
+| `index.html` | Page that starts the service via `launchAppControl` and exits |
 | `config.xml` | Widget manifest; `application.launch` privilege is what lets the page start the service |
 | `build.js` | Stages + signs the `.wgt` (uses the same `~/.tizen-certs` as the main app) |
 

@@ -9,7 +9,10 @@
      Control API can launch the app but nothing else, and on-boot does not
      fire for sideloaded services on this firmware — so the page does what
      the homebrew TV screen does: ask the platform to start the service,
-     then leave the screen on its own. -->
+     then exit. The service is its own application and outlives this page;
+     a hidden page would keep a whole web runtime resident (72 MB on a
+     CU7105) for nothing. The homebrew service launches this page again
+     whenever port 11470 goes silent. -->
 <script>
 'use strict';
 
@@ -30,20 +33,29 @@
             'S6K2WQ8MnP.StremioServerService',
             function () {
                 note('service launched');
-                hide();
+                leave();
             },
             function (e) {
                 note('service launch failed: ' + e.message);
-                hide();
+                leave();
             }
         );
     };
 
-    var hide = function () {
+    var leave = function () {
+        note('exiting');
+
+        try {
+            tizen.application.getCurrentApplication().exit();
+            return;
+        } catch (exitError) {
+            note('exit failed: ' + exitError.message + '; hiding instead');
+        }
+
         try {
             tizen.application.getCurrentApplication().hide();
-        } catch (e) {
-            note('hide failed: ' + e.message);
+        } catch (hideError) {
+            note('hide failed: ' + hideError.message);
         }
     };
 

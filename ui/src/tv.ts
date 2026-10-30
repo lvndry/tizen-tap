@@ -111,33 +111,36 @@ function post(path) {
 });
 }
 
-// The launch-param page leaves itself: the greeting proves the service is up, the timer gives the
-// socket a second to deliver it before the page goes. A backgrounding failure is not worth holding
-// the set on for — the old behaviour (stay put) is the fallback.
-// The Control API cannot say why the app was opened — it has no launch
-// parameters in the web runtime — so the page decides for itself: once the
-// greeting proves the service is up, the page has done its only job and hides.
-// A hidden TV app pauses its JavaScript but keeps running, and pressing
-// 'homebrew' on the remote opens it again.
-// A key is the only signal that distinguishes a person from a nudge, so the
-// page waits one beat after the greeting and hides unless someone has already
-// reached for the remote in that time.
-let hasSelfHid = false;
+// The Control API cannot say why the app was opened (the web runtime has no launch parameters), so the
+// page decides for itself: once the greeting proves the service is up, a page nobody has reached for
+// within one beat has done its only job and exits. A hidden page would keep a whole web runtime resident
+// (110 MB on a CU7105) with its JavaScript paused, doing nothing an exited one does not.
+// Nothing in the service needs this page: it is its own application, kept up by config.xml's on-boot and
+// auto-restart; the socket only feeds this screen; the pairing code is minted and kept by the service; and
+// this page's relaunch watchdog never ran while hidden. Pressing 'homebrew' on the remote opens it again.
+let hasSelfExited = false;
 let touched = false;
 
-function selfHide() {
-    if (hasSelfHid) return;
-    hasSelfHid = true;
+function selfExit() {
+    if (hasSelfExited) return;
+    hasSelfExited = true;
 
     setTimeout(() => {
         if (!store.get().pin || leaving || touched) return;
 
-        say('service is up — going to the background', 'info');
+        say('service is up, nobody is watching: closing this screen', 'info');
 
         try {
-            application.hide();
-        } catch (e) {
-            say(`backgrounding failed: ${e.message || e}`, 'warn');
+            leave();
+        } catch (exitError) {
+            leaving = false;
+            say(`exit failed: ${exitError.message || exitError}; going to the background instead`, 'warn');
+
+            try {
+                application.hide();
+            } catch (hideError) {
+                say(`backgrounding failed: ${hideError.message || hideError}`, 'warn');
+            }
         }
     }, 4000);
 }
@@ -468,7 +471,7 @@ const link = openSocket({
     url: application ? `ws://127.0.0.1:${PORT}` : null,
     onStatus: (status: string) => {
         changed(status);
-        selfHide();
+        selfExit();
     },
 
     onMessage: (type, payload) => {
