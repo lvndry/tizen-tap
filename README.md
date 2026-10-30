@@ -92,6 +92,18 @@ a keypad).
    `diagnosis` should read `Everything looks healthy.` If it says the root
    channel is not armed, arm it once:
    `curl -X POST -H "x-homebrew-pin: <pin>" http://<tv-ip>:8091/dev/root/arm`
+8. **Install the rescue too.** Tizen Tap is the TV's installer, so an update
+   that breaks it leaves nothing on the TV able to put it back. The rescue is
+   a small separate app that checks Tizen Tap a minute after every boot and
+   reinstalls the last build that worked if it is gone. From a checkout:
+
+   ```sh
+   node rescue/build.js
+   npm run install-app -- <tv-ip> release/rescue.wgt --pin <pin>
+   ```
+
+   Two minutes after Tizen Tap starts, `/dev/status` lists `rescue.lastGood`;
+   until then its `diagnosis` carries an `Also:` line saying there is none.
 
 From then on the TV installs its own apps, and Host PC IP stays
 `127.0.0.1`. You only repeat these steps to reinstall tizen-tap from a

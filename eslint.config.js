@@ -91,7 +91,7 @@ module.exports = [
         ]
     },
     {
-        files: ['tools/**/*.js', 'service/**/*.js'],
+        files: ['tools/**/*.js', 'service/**/*.js', 'rescue/**/*.js'],
         ignores: SHARED_ES_MODULES,
         languageOptions: {
             ecmaVersion: 2022,

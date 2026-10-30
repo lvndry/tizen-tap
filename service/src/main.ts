@@ -56,6 +56,7 @@ const { RootChannel } = require('./root/channel.ts');
 const rootArm = require('./root/arm.ts');
 const { makePortProbe, createWatchdog, stremioLanHost } = require('./revive.ts');
 const { noteLaunch } = require('./launches.ts');
+const { createKeeper, keepCandidate, probeVersion, lanIpv4 } = require('./rescue/lastgood.ts');
 
 // 8080 is taken by a Samsung system service, so binding there fails with EADDRINUSE.
 const PORT = Number(process.env.HOMEBREW_PORT) || 8091;
@@ -239,7 +240,8 @@ function start() {
 
     const installer = createInstaller({
         sdb, device, config, resigner, store, log, rootChannel: channel,
-        rearmRoot: () => rootArm.arm(sdb, channel, (line) => svc.info(line))
+        rearmRoot: () => rootArm.arm(sdb, channel, (line) => svc.info(line)),
+        keepCandidate: device.onTv ? (archive) => keepCandidate(require('fs'), archive, (line) => svc.info(line)) : null
     });
 
     function announce(state, previous) {
@@ -422,6 +424,16 @@ function start() {
     });
 
     reviveCompanions();
+
+    // The copy the rescue companion reinstalls when an update leaves this app dead.
+    if (device.onTv) {
+        createKeeper({
+            fs: require('fs'),
+            build: BUILD,
+            probe: () => probeVersion(lanIpv4() || '127.0.0.1', PORT),
+            log: (line) => svc.info(line)
+        }).start();
+    }
 
     return { server, port: PORT, pin: secret, build: BUILD };
 }

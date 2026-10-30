@@ -91,6 +91,24 @@ const run = async () => {
             String(announced[0][1].icon).slice(0, 40));
     }
 
+    {
+        const kept = [];
+        const store = createStore({ installing: false, catalog: [] });
+        const upload = fixture.wgtWithIcon();
+        const otherConfig = Buffer.from(readFileSync(join(__dirname, '..', '..', 'config.xml')).toString('utf8').replace(/GJBBYNLkgP/g, 'ACME000001'));
+
+        const { install } = createInstaller({
+            sdb: fakeSdb(), device: fakeDevice(), config: fakeConfig({ author: 'present' }),
+            resigner: fakeResigner, store, keepCandidate: (archive) => kept.push(archive)
+        });
+
+        await install({ source: 'upload', reference: 'homebrew.wgt', upload });
+        await install({ source: 'upload', reference: 'other.wgt', upload: fixture.zip('config.xml', otherConfig) });
+
+        check('a self-install hands its signed package to the rescue keeper, another app does not',
+            kept.length === 1 && kept[0].equals(upload), `${kept.length} kept`);
+    }
+
 
     {
         // A copy of another package that survived an earlier failed install has to
