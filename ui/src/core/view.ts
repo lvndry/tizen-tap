@@ -87,4 +87,4 @@ function delegate(handlers) {
     });
 }
 
-export { html, raw, escape, mount, delegate };
+export { html, mount, delegate };
