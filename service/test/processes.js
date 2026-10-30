@@ -97,6 +97,9 @@ async function main() {
     check('the whole view is one shell line ending in the kill-log scan',
         PROCESSES_COMMAND.indexOf('\n') === -1 && PROCESSES_COMMAND.endsWith(OOM_DMESG_COMMAND) &&
         PROCESSES_COMMAND.length < 8 * 1024, PROCESSES_COMMAND);
+
+    check('the command carries no backslash, which the root channel does not pass through unchanged',
+        PROCESSES_COMMAND.indexOf('\\') === -1, PROCESSES_COMMAND);
 }
 
 main().then(() => {

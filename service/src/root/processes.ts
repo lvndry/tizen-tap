@@ -21,12 +21,14 @@ const OOM_MARK = '@OOM';
 
 // Kernel threads have no VmRSS line, so they print nothing. The loop stops at
 // VmRSS because Name comes first in /proc/<pid>/status and nothing later is needed.
+// No backslashes: the root channel does not hand them to the shell unchanged, and
+// on the CU7105 printf's newline escape arrived as a literal backslash-n.
 const PROCESSES_COMMAND = [
     'for d in /proc/[0-9]*; do',
     'pid=${d#/proc/}; name=; rss=; adj=;',
     'while read key value; do case $key in Name:) name=$value;; VmRSS:) rss=${value%% *}; break;; esac; done 2>/dev/null < $d/status;',
     'read adj 2>/dev/null < $d/oom_score_adj;',
-    '[ -n "$rss" ] && printf \'P %s %s %s %s\\n\' "$pid" "$rss" "${adj:--}" "$name";',
+    '[ -n "$rss" ] && echo "P $pid $rss ${adj:--} $name";',
     'done;',
     `echo ${ARGS_MARK}; ps -eo pid,args;`,
     `echo ${MEMINFO_MARK}; cat /proc/meminfo;`,
