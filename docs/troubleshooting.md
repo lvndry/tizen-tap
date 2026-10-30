@@ -58,6 +58,12 @@ node apps.js --close
 
 This is safe. They start normally the next time someone opens them.
 
+Our own pages do not stay behind. Hidden, the Tizen Tap UI held 110 MB and
+the Stremio server's page 72 MB on the CU7105, more than any Samsung
+process. So the Stremio page exits as soon as it has started its service,
+and the Tizen Tap UI exits 4 s after the service answers unless someone
+pressed a key on the remote. Both services keep running without them.
+
 On the CU7105 an earlier `GET /dev/status` showed memory pressure as
 critical: about 207 MB free of 1578 MB, with swap exhausted. That is the
 state in which the kernel reaps sideloaded services like this one. Note

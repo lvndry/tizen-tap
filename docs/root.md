@@ -90,6 +90,9 @@ kill $(ps -eo pid,comm | awk '/newslO9NqF/{print $1}') # an app's UI process
 Kills are temporary — a daemon that the platform respawns comes back —
 but the running ones are exactly the ones competing with your services
 for the last hundred megabytes.
+Our own pages are not on that list: the Tizen Tap UI and the Stremio page
+exit once their service is up instead of hiding (hidden, they held 110 MB
+and 72 MB).
 
 ### 3. Read and write the settings database
 
