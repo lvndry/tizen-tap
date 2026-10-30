@@ -9,8 +9,8 @@
 
 const JSZip = require('jszip');
 
-const sdb = require('../service/src/tv/sdb.js');
-const verdicts = require('../service/src/install/verdicts.js');
+const sdb = require('../service/src/tv/sdb.ts');
+const verdicts = require('../service/src/install/verdicts.ts');
 
 const STAGING_DIR = '/home/owner/share/tmp/sdk_tools';
 
