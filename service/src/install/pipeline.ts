@@ -26,6 +26,10 @@ const QUIET = ['debug', 'info', 'ok', 'warn', 'err']
 // never ran, so another route is safe to try.
 const HELD_BY_ANOTHER_SESSION = { sdbClosed: true, sdbReset: true };
 
+// At the readiness probe sdbd can also just hang until the timeout (seen on a CU7105 with the agent
+// connected). The probe only asked for the duid, so nothing was installed and root is still safe.
+const PROBE_HELD_BY_ANOTHER_SESSION = { ...HELD_BY_ANOTHER_SESSION, sdbTimeout: true };
+
 // sdbd takes a moment to notice its session's process is gone.
 const SDBD_SETTLE_MS = 1000;
 
@@ -37,7 +41,8 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
     const say = log ? log.on('pkg') : QUIET;
     const sdbSays = log ? log.on('sdb') : QUIET;
 
-    const rootHoldsSdbd = (code) => !!(HELD_BY_ANOTHER_SESSION[code] && rootChannel && rootChannel.status().root);
+    const rootHoldsSdbd = (code, held = HELD_BY_ANOTHER_SESSION) =>
+        !!(held[code] && rootChannel && rootChannel.status().root);
 
     async function install(request: any, report = (..._args: any[]) => {}) {
         if (store.select('installing')) {
@@ -69,7 +74,7 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
                   `, sdb ${state.ready ? 'reachable' : `unreachable — ${state.sdbDetail || state.sdbError || state.reason || 'unknown'}`}`
                 : 'no television here — running as a development harness');
 
-            if (state.onTv && !state.ready && rootHoldsSdbd(state.sdbError)) {
+            if (state.onTv && !state.ready && rootHoldsSdbd(state.sdbError, PROBE_HELD_BY_ANOTHER_SESSION)) {
                 say.info('sdb is turning clients away while the root agent holds its session; ' +
                     'the install will fall back to root if sdb still refuses');
             } else if (state.onTv && !state.ready) {
@@ -215,6 +220,22 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
             const isSelf = packageId === SELF_PACKAGE_ID;
 
             phase('installing', carried.identity.name || carried.identity.packageId);
+
+            // The probe already saw sdb held by the root agent, so sdb is not tried at all: a second
+            // attempt would hang the same way, and root is only safe while nothing went over sdb.
+            const { state } = carried;
+            if (state && state.onTv && !state.ready && rootHoldsSdbd(state.sdbError, PROBE_HELD_BY_ANOTHER_SESSION)) {
+                sdbSays.warn(`sdb was held by the root agent at the probe (${state.sdbError}); not trying it again`);
+
+                if (isSelf) {
+                    await selfUpdateOverSdb(carried, { code: state.sdbError });
+                    say.info('installed over sdb after releasing the root agent');
+                    return { ...carried, route: 'sdb' };
+                }
+
+                await overRoot(carried);
+                return { ...carried, route: 'root' };
+            }
 
             try {
                 // A self-update installs in place: sdbd overwrites the files, and the
