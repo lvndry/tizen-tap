@@ -81,8 +81,8 @@
     </tizen:service>
 
     <!-- background-support is "disable" so Back actually ends the page. Enabled,
-         the runtime keeps it alive in the background and the theme audio plays on
-         over the Tizen home screen. The service above is a separate application,
-         so ui/src/tv.js asks it to exit before this one does. -->
+         the runtime keeps it alive in the background behind the Tizen home screen.
+         The service above is a separate application, so ui/src/tv.js asks it to
+         exit before this one does. -->
     <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"/>
 </widget>

@@ -4,7 +4,6 @@ import { createStore } from './core/store.ts';
 import { mount, delegate } from './core/view.ts';
 import { remote, KEY } from './core/remote.ts';
 import { connect as openSocket } from './core/socket.ts';
-import { theme } from './scene/theme.ts';
 import { masthead, connect, status, log, overlay, deck, windowOf } from './views/television.ts';
 
 const PORT = 8091;
@@ -27,7 +26,6 @@ const store = createStore({
     view: 'main',
     from: 0,
     rows: null,
-    themeOn: false,
     restarting: false
 });
 
@@ -82,12 +80,6 @@ function say(text, level = 'info') {
 }
 
 window.onerror = (message, _source, line) => say(`page error: ${message} (line ${line})`, 'err');
-
-// The television is silent until someone turns the theme on; a person's own choice overrides it.
-const channel = theme({
-    defaultOn: false,
-    onState: ({ playing }) => store.update({ themeOn: playing })
-});
 
 // The one thing left on HTTP: a single shot with no answer worth waiting for. Everything this page
 // used to ask for repeatedly now arrives over the socket instead. The PIN comes from the service's
@@ -159,9 +151,7 @@ let leaving = false;
 
 // Only this page leaves. The service is a separate application that starts with the television and is
 // meant to outlive every visit to this screen — a phone can reach it with nobody in front of the set,
-// which is the whole point of config.xml's on-boot. The audio is torn down here rather than left to
-// the page going away, because a runtime that keeps the page alive keeps the theme playing over the
-// Tizen home screen.
+// which is the whole point of config.xml's on-boot.
 function leave() {
     if (leaving) return;
 
@@ -172,7 +162,6 @@ function leave() {
 
     leaving = true;
 
-    channel.stop();
     application.exit();
 }
 
@@ -213,7 +202,6 @@ function toEnd() {
 }
 
 const actions = {
-    theme: () => channel.toggle(),
     logs: () => open('logs'),
     credits: () => open('credits'),
     close: () => close(),
