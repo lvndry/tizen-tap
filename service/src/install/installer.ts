@@ -34,4 +34,4 @@ function run(session, path, packageId) {
     }).then((output) => interpret(output, { packageId }));
 }
 
-module.exports = { stage, run, STAGING_DIR };
+module.exports = { stage, run };

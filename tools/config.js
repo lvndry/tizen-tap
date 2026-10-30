@@ -77,4 +77,4 @@ function load(options) {
     return config;
 }
 
-module.exports = { load, CONFIG_PATH, ROOT, PLACEHOLDER_HOSTS };
+module.exports = { load, CONFIG_PATH, ROOT };

@@ -519,4 +519,4 @@ const devService = ({ enabled }) => ({
     }
 });
 
-export { devService, PIN };
+export { devService };

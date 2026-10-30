@@ -140,4 +140,4 @@ const whyNoDuid = (ip, pin) => `${ip} did not answer with a device id.\n\n` + (p
       '  Or, if this set is already pinned to 127.0.0.1, read the code off its screen\n' +
       '  and the question goes through Tizen Tap instead.');
 
-module.exports = { duidOf, overSdb, overRelay, describe, localAddressFor, whyNoDuid, PORT, DEVICE_API_PORT };
+module.exports = { duidOf, describe, localAddressFor, whyNoDuid, DEVICE_API_PORT };

@@ -114,4 +114,4 @@ function arm(sdb, channel, log) {
     });
 }
 
-module.exports = { manifest, stage, launcherCommand, injectionFor, arm, VENDOR };
+module.exports = { manifest, stage, arm, VENDOR };

@@ -71,4 +71,4 @@ function bytes(n) {
     return `${Math.round(n / 1024)}KB`;
 }
 
-module.exports = { style, heading, group, ok, fail, warn, info, note, blank, crash, bytes, enabled };
+module.exports = { style, heading, group, ok, fail, warn, info, note, blank, crash, bytes };

@@ -100,4 +100,4 @@ function describeFile(path) {
     }
 }
 
-module.exports = { describe, describeFile, iconOf, HEAD, MAX_ICON };
+module.exports = { describe, describeFile, HEAD, MAX_ICON };

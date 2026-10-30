@@ -136,4 +136,4 @@ const write = (directory, minted, keeping, password, existing) => {
     writeFileSync(join(directory, 'author.pw'), existing.password);
 };
 
-module.exports = { signIn, mint, write, SIGN_IN, CALLBACK_PORT };
+module.exports = { signIn, mint, write, SIGN_IN };

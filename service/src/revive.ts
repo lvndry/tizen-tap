@@ -76,6 +76,5 @@ module.exports = {
     makePortProbe,
     createWatchdog,
     stremioLanHost,
-    STREMIO_PORT,
     PERIODIC_CHECK_MS
 };

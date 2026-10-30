@@ -553,5 +553,5 @@ function register(ctx, router) {
 
 module.exports = {
     register, buildStatus, diagnose, parseBuxton2, noteArmError, realScanProc, realStremio, stremioLanHost,
-    parseMeminfo, parseOomKills, realMeminfo, OOM_DMESG_COMMAND, STREMIO_PKG_IDS
+    parseMeminfo, parseOomKills, OOM_DMESG_COMMAND, STREMIO_PKG_IDS
 };

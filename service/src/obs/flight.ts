@@ -154,4 +154,4 @@ function createFlightRecorder(options) {
     };
 }
 
-module.exports = { createFlightRecorder, judge, RUN_RECORD, EXIT_RECORD, ABRUPT, CAP_BYTES, TAIL_LINES };
+module.exports = { createFlightRecorder, judge, RUN_RECORD, EXIT_RECORD, ABRUPT };

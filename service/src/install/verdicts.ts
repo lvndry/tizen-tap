@@ -118,4 +118,4 @@ function interpret(output, context) {
     return { output: text };
 }
 
-module.exports = { interpret, failureIn, settled, verdictLine, SIGNATURES, SUCCEEDED };
+module.exports = { interpret, failureIn, settled, SIGNATURES };

@@ -241,6 +241,5 @@ const install = async (session, options) => {
 const handOff = (session, pair) => push(session, HANDOFF_PATH, Buffer.from(JSON.stringify(pair)));
 
 module.exports = {
-    connect, install, handOff, push, isSigned, idsIn, manifestIn, launchApp, confirmInstalled,
-    STAGING_DIR, HANDOFF_PATH, REMOTE_WGT
+    connect, install, handOff, push, isSigned, idsIn, manifestIn, launchApp
 };

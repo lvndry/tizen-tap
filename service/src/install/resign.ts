@@ -105,4 +105,4 @@ async function resign(archive, certificates) {
     };
 }
 
-module.exports = { resign, openPair, deviceOf, devicesOf, SIGNATURE_FILE };
+module.exports = { resign, openPair, deviceOf, devicesOf };
