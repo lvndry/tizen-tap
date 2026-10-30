@@ -70,6 +70,11 @@ Settings → Developer mode**, and each needs a TV restart to take effect:
 After the second change, the TV installs apps over its own loopback and no
 other machine on the network can reach its sdb daemon.
 
+"Restart" here means unplugging the TV for 30 s. Standby from the remote
+does not count: sdbd reads Host PC IP only on a real boot. So an install
+takes two unplugs, one after each change. If `/dev/status` then says the
+root channel is not armed, `POST /dev/root/arm` once.
+
 From a checkout (Node 20+):
 
 ```sh
