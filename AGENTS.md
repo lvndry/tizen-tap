@@ -73,8 +73,14 @@ It re-arms after every power cycle; if it is not connected, call
 
 A 403 means the PIN is wrong; `GET /pin` (from the TV itself) or the
 PIN relay is how you get the current one. It is minted once at first start
-and kept across restarts, so cache it. Five wrong guesses lock pairing
-for five minutes — back off, do not hammer.
+and kept across restarts, so cache it. Five wrong guesses lock out **the
+device that made them** (counted per client address, so other clients with
+the right PIN keep working): a 429 with `Retry-After` and `retryAfterSeconds`.
+The wait starts at 60s and doubles with each lockout that device earns, up to
+an hour; a correct PIN clears it, and so does an hour with no failures. Wait
+out `Retry-After`, refresh the PIN, do not hammer: every lockout makes the next
+one longer. On the TV itself every caller is `127.0.0.1`, so local tools share
+one count.
 
 ### Getting one answer instead of five
 
@@ -147,6 +153,15 @@ then `token.txt` is the key. Installing from a checkout of this repo is
   `endedCleanly: false` means that run left no exit record (killed, e.g. by
   the out-of-memory killer, or power loss), and `tail` is the last thing it
   said. `/dev/status` repeats the verdict as `previousRun`.
+- **`/install` returns 409 `installBusy`** → another client's install is
+  running (one at a time: a self-update restarts the service mid-flight). The
+  body names it (`installing: { name, phase, startedAt }`). Wait
+  `Retry-After` seconds (10 to 30) and send the same request again; this is
+  not a failure of your package. Do not `POST /restart` to clear it, that
+  kills the other client's install.
+- **429 `lockedOut`** → this device sent five wrong PINs. Wait `Retry-After`,
+  refresh the PIN (`GET /pin` or the relay), retry once. Other clients are
+  not affected.
 - **`listen.js` prints nothing** → this model is quiet on the
   remote channel by design. Silence is a working result, not an error. Read
   `/logs` or `/packages` instead.

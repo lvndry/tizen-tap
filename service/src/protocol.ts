@@ -24,7 +24,7 @@ const Outbound = {
     CATALOG: 'catalog',             // { entries: [CatalogEntry], stale, source }
     PROGRESS: 'progress',           // { phase: probing|fetching|resigning|staging|installing, detail?, identity? }
     DONE: 'done',                   // { packageId, appId }
-    ERROR: 'error',                 // { code, message, remedy?, fatal }
+    ERROR: 'error',                 // { code, message, remedy?, fatal, retryAfterSeconds?, installing? }
     DIR: 'dir',                     // [{ name, path, isDirectory, size?, identity? }]
     NEEDS_CERTS: 'needsCerts',      // { ip }
     RELAY_STATE: 'relayState',      // { enabled }
@@ -48,6 +48,7 @@ const ErrorCode = {
     RESIGN_FAILED: 'resignFailed',
     RELAY_DISABLED: 'relayDisabled',
     LOCKED_OUT: 'lockedOut',
+    INSTALL_BUSY: 'installBusy',
     INTERNAL: 'internal',
 
     INSTALL_FAILED: 'installFailed',

@@ -19,7 +19,7 @@
 
 'use strict';
 
-const { json, failure } = require('../http/respond.ts');
+const { json, failure, denied } = require('../http/respond.ts');
 const { ErrorCode } = require('../protocol.ts');
 const { recentLaunches } = require('../launches.ts');
 
@@ -463,8 +463,8 @@ function register(ctx, router) {
     function authorisedRead(request, response, handle) {
         if (fromLoopback(request)) return handle();
 
-        const verdict = authorise(request.headers['x-homebrew-pin']);
-        if (!verdict.ok) return failure(response, 403, verdict.code, verdict.message);
+        const verdict = authorise(request.headers['x-homebrew-pin'], request.socket && request.socket.remoteAddress);
+        if (!verdict.ok) return denied(response, verdict);
 
         return handle();
     }
@@ -524,10 +524,10 @@ function register(ctx, router) {
     // PIN-gated like the other /dev holes: the diagnosis is read-only, but it
     // walks /proc, connects to sdbd and execs through the root channel.
     function gate(request, response) {
-        const verdict = ctx.authorise(request.headers['x-homebrew-pin']);
+        const verdict = ctx.authorise(request.headers['x-homebrew-pin'], request.socket && request.socket.remoteAddress);
         if (verdict.ok) return true;
 
-        failure(response, verdict.code === ErrorCode.LOCKED_OUT ? 429 : 403, verdict.code, verdict.message);
+        denied(response, verdict);
         return false;
     }
 

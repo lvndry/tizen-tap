@@ -15,6 +15,33 @@ function refuse(code, message) {
     return Object.assign(new Error(message), { code });
 }
 
+// A second client is told when to come back rather than failing outright. An install that has
+// already run long is a slow one (a big download, a cold sdbd), so it is asked to wait longer.
+const BUSY_RETRY_MIN_S = 10;
+const BUSY_RETRY_MAX_S = 30;
+
+function busyRetrySeconds(startedAt, now = Date.now()) {
+    const ranSeconds = startedAt ? Math.max(0, (now - startedAt) / 1000) : 0;
+    return Math.min(BUSY_RETRY_MAX_S, Math.max(BUSY_RETRY_MIN_S, Math.ceil(ranSeconds / 2)));
+}
+
+function refuseBusy(running, now = Date.now()) {
+    const described = running && typeof running === 'object' ? running : {};
+    const startedAt = described.startedAt || null;
+    const retryAfterSeconds = busyRetrySeconds(startedAt, now);
+    const installing = {
+        name: described.name || null,
+        phase: described.phase || null,
+        startedAt: startedAt ? new Date(startedAt).toISOString() : null
+    };
+
+    const what = [installing.name, installing.phase].filter(Boolean).join(', ');
+    const message = `An install is already running${what ? ` (${what})` : ''}. ` +
+        `Try again in ${retryAfterSeconds}s.`;
+
+    return Object.assign(refuse('installBusy', message), { retryAfterSeconds, installing });
+}
+
 // The package this service runs out of. A self-update is the one install where
 // uninstalling first would remove the very process doing the installing.
 const SELF_PACKAGE_ID = 'GJBBYNLkgP';
@@ -45,20 +72,27 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
         !!(held[code] && rootChannel && rootChannel.status().root);
 
     async function install(request: any, report = (..._args: any[]) => {}) {
-        if (store.select('installing')) {
-            say.warn('refused: an install is already running');
-            throw refuse('internal', 'An install is already running.');
+        const running = store.select('installing');
+        if (running) {
+            const busy = refuseBusy(running);
+            say.warn(`refused: an install is already running (${busy.installing.name || 'unnamed'}, ` +
+                `${busy.installing.phase || 'starting'}), asked to retry in ${busy.retryAfterSeconds}s`);
+            throw busy;
         }
 
-        store.update({ installing: true });
+        const startedAt = Date.now();
+
+        // Truthy for the guard, and what a refused second client is told about this one.
+        const track = (patch) => store.update({ installing: { ...store.select('installing'), ...patch } });
+        store.update({ installing: { name: request.reference || null, phase: null, startedAt } });
 
         const held = memory.peak();
         const phase = (name: string, detail?: any, extra?: any) => {
             held.at(name);
+            track({ phase: name });
             report(name, detail, extra);
         };
 
-        const startedAt = Date.now();
         const at = () => Date.now() - startedAt;
 
         say.info(`install requested: ${request.source} ${request.reference || '(upload)'}`);
@@ -113,6 +147,7 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
         // Read as it arrived: a file that is not a package should be refused before anything signs it.
         const readIdentity = (carried) => {
             const identity = manifest.identify(carried.archive);
+            track({ name: identity.name || identity.packageId || carried.name || null });
 
             say.info(`identified ${identity.name || 'an unnamed package'} ${identity.version || ''} ` +
                 `(${identity.packageId}${identity.appId ? `, app ${identity.appId}` : ''}, ${identity.isWgt ? 'wgt' : 'tpk'})`);
@@ -326,4 +361,4 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
     return { install };
 }
 
-module.exports = { createInstaller };
+module.exports = { createInstaller, busyRetrySeconds };

@@ -9,19 +9,18 @@
 
 'use strict';
 
-const { json, failure } = require('../http/respond.ts');
+const { json, denied } = require('../http/respond.ts');
 const { took, host } = require('../obs/units.ts');
-const { ErrorCode } = require('../protocol.ts');
 
 function register(ctx, router) {
     const { build, sdb, svc, recorded } = ctx;
 
     function exitAfterResponse(payload, asked, why, restart) {
     return (request, response) => {
-        const verdict = ctx.authorise(request.headers['x-homebrew-pin']);
+        const verdict = ctx.authorise(request.headers['x-homebrew-pin'], request.socket && request.socket.remoteAddress);
 
         if (!verdict.ok) {
-            return failure(response, verdict.code === ErrorCode.LOCKED_OUT ? 429 : 403, verdict.code, verdict.message);
+            return denied(response, verdict);
         }
 
         json(response, { ok: true, build, ...payload });

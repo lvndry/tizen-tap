@@ -18,7 +18,7 @@
 
 const { createServer } = require('http');
 const { join } = require('path');
-const { took } = require('./obs/units.ts');
+const { took, host } = require('./obs/units.ts');
 const { homedir } = require('os');
 
 const { startRecording, Facility } = require('./obs/log.ts');
@@ -56,8 +56,6 @@ const { RootChannel } = require('./root/channel.ts');
 const rootArm = require('./root/arm.ts');
 const { makePortProbe, createWatchdog, stremioLanHost } = require('./revive.ts');
 const { noteLaunch } = require('./launches.ts');
-
-const { ErrorCode } = protocol;
 
 // 8080 is taken by a Samsung system service, so binding there fails with EADDRINUSE.
 const PORT = Number(process.env.HOMEBREW_PORT) || 8091;
@@ -194,7 +192,6 @@ function start() {
         installing: false,
         catalog: [],
         catalogStale: false,
-        lockout: pin.fresh(),
         device: null
     });
 
@@ -305,22 +302,10 @@ function start() {
     return LOOPBACK.indexOf((request.socket && request.socket.remoteAddress) || '') !== -1;
 }
 
-    function authorise(presented) {
-        const lockout = store.select('lockout');
-
-        if (pin.isLocked(lockout)) {
-            const seconds = Math.ceil(pin.remaining(lockout) / 1000);
-            return { ok: false, code: ErrorCode.LOCKED_OUT, message: `Too many incorrect PINs. Try again in ${seconds}s.` };
-        }
-
-        if (!pin.matches(presented, secret)) {
-            store.update({ lockout: pin.recordFailure(lockout) });
-            return { ok: false, code: ErrorCode.UNAUTHORIZED, message: 'Wrong or missing PIN.' };
-        }
-
-        store.update({ lockout: pin.recordSuccess() });
-        return { ok: true };
-    }
+    const authorise = pin.createAuthoriser(secret, {
+        onLockout: (address, lockout) => log.on(Facility.AUTH).warn(
+            `${host(address)} locked out for ${Math.ceil(pin.remaining(lockout) / 1000)}s (lockout ${lockout.lockouts})`)
+    });
 
     const ctx: any = {
         build: BUILD,
