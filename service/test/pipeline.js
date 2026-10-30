@@ -163,7 +163,29 @@ const run = async () => {
         });
 
         const refused = await install({ source: 'upload', upload: realPackage }).catch((e) => e);
-        check('a second concurrent install is refused', refused.code === 'internal', String(refused.code));
+        check('a second concurrent install is refused as busy', refused.code === 'installBusy', String(refused.code));
+        check('and told when to come back', refused.retryAfterSeconds >= 10 && refused.retryAfterSeconds <= 30,
+            String(refused.retryAfterSeconds));
+        check('the first install still holds the guard', store.select('installing') === true, String(store.select('installing')));
+    }
+
+    {
+        const seen = [];
+        const store = createStore({ installing: false, catalog: [] });
+        const { install } = createInstaller({
+            sdb: fakeSdb(), device: fakeDevice(), config: fakeConfig({ author: 'present' }),
+            resigner: fakeResigner, store
+        });
+
+        await install({ source: 'upload', reference: 'homebrew.wgt', upload: fixture.wgtWithIcon() },
+            () => seen.push(store.select('installing')));
+
+        const last = seen[seen.length - 1];
+        check('a running install describes itself in the store',
+            last && last.phase === 'installing' && typeof last.startedAt === 'number' && last.name,
+            JSON.stringify(last));
+        check('and the description is gone afterwards', store.select('installing') === false,
+            JSON.stringify(store.select('installing')));
     }
 
     {

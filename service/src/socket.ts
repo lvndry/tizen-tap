@@ -38,8 +38,9 @@ function attach({ server, store, authorise, installer, catalog, updates, relay, 
         let paired = false;
         let unwatch: null | (() => void) = null;
 
-        const client = host((request && request.socket && request.socket.remoteAddress) ||
-            (socket._socket && socket._socket.remoteAddress));
+        const address = (request && request.socket && request.socket.remoteAddress) ||
+            (socket._socket && socket._socket.remoteAddress);
+        const client = host(address);
         const openedAt = Date.now();
 
         connected += 1;
@@ -85,7 +86,10 @@ function attach({ server, store, authorise, installer, catalog, updates, relay, 
                 message: (error && error.message) || 'Unexpected failure.',
                 // Only on failures verdicts.ts recognized: what to do, which the UI cannot know.
                 remedy: (error && error.remedy) || null,
-                fatal: false
+                fatal: false,
+                // A refusal that passes: a lockout, or another client's install.
+                ...(error && error.retryAfterSeconds ? { retryAfterSeconds: error.retryAfterSeconds } : {}),
+                ...(error && error.installing ? { installing: error.installing } : {})
             });
         }
 
@@ -110,12 +114,15 @@ function attach({ server, store, authorise, installer, catalog, updates, relay, 
         }
 
         async function greet({ pin }) {
-            const verdict = authorise(pin);
+            const verdict = authorise(pin, address);
 
             if (!verdict.ok) {
                 if (auth) auth.warn(`${client} ${verdict.code === ErrorCode.LOCKED_OUT ? 'is locked out' : 'gave the wrong PIN'}`);
 
-                if (verdict.code === ErrorCode.LOCKED_OUT) return sendFailure(ProtocolError(verdict.code, verdict.message));
+                if (verdict.code === ErrorCode.LOCKED_OUT) {
+                    return sendFailure(Object.assign(ProtocolError(verdict.code, verdict.message),
+                        { retryAfterSeconds: verdict.retryAfterSeconds }));
+                }
                 return send(Outbound.HELLO, { ok: false, needsPin: true });
             }
 

@@ -8,9 +8,8 @@
 
 'use strict';
 
-const { json, failure, readBody } = require('../http/respond.ts');
+const { json, denied, readBody } = require('../http/respond.ts');
 const { host } = require('../obs/units.ts');
-const { ErrorCode } = require('../protocol.ts');
 
 const MAX_SOURCE = 64 * 1024;
 const SHELL_TIMEOUT_MS = 45000;
@@ -26,10 +25,10 @@ function register(ctx, router) {
     const { svc, sdb, repl } = ctx;
 
     function gate(request, response) {
-        const verdict = ctx.authorise(request.headers['x-homebrew-pin']);
+        const verdict = ctx.authorise(request.headers['x-homebrew-pin'], request.socket && request.socket.remoteAddress);
         if (verdict.ok) return true;
 
-        failure(response, verdict.code === ErrorCode.LOCKED_OUT ? 429 : 403, verdict.code, verdict.message);
+        denied(response, verdict);
         return false;
     }
 

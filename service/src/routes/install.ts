@@ -8,7 +8,7 @@
 
 'use strict';
 
-const { json, failure, readBody } = require('../http/respond.ts');
+const { json, failure, denied, retryLater, readBody } = require('../http/respond.ts');
 const { size, took, host } = require('../obs/units.ts');
 const { Facility } = require('../obs/log.ts');
 const { ErrorCode } = require('../protocol.ts');
@@ -25,8 +25,8 @@ function register(ctx, router) {
     const cfg = log.on(Facility.CFG);
 
     function requirePin(request, response) {
-        const verdict = authorise(request.headers['x-homebrew-pin']);
-        return verdict.ok || failure(response, verdict.code === ErrorCode.LOCKED_OUT ? 429 : 403, verdict.code, verdict.message);
+        const verdict = authorise(request.headers['x-homebrew-pin'], request.socket && request.socket.remoteAddress);
+        return verdict.ok || denied(response, verdict);
     }
 
     router.on.post('/install', async (request, response) => {
@@ -60,6 +60,15 @@ function register(ctx, router) {
                 }, 300);
             }
         } catch (error) {
+            if (error.code === ErrorCode.INSTALL_BUSY) {
+                return retryLater(response, 409, {
+                    code: error.code,
+                    message: error.message,
+                    retryAfterSeconds: error.retryAfterSeconds,
+                    installing: error.installing
+                });
+            }
+
             failure(response, 500, error.code || ErrorCode.INTERNAL, error.message, error.remedy);
             pkg.err(`upload install stopped after: ${phases.join(', ') || 'nothing'}`);
         }

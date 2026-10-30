@@ -23,6 +23,7 @@ const Send = {
 const EXPLANATIONS = {
     unauthorized: 'Enter the PIN shown on the TV first.',
     lockedOut: 'Too many incorrect PINs.',
+    installBusy: 'Another install is running. Try again shortly.',
     debugModeOff: 'Developer Mode is off on this TV.',
     sdbUnreachable: 'This TV cannot reach its own sdb daemon.',
     sdbRefused: 'This TV refused the connection to its own sdb daemon.',

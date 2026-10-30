@@ -54,7 +54,17 @@ const main = async () => {
     }).catch((e) => { throw friendly(`Tizen Tap did not answer on ${host}:${PORT}: ${e.message}`); });
 
     if (response.status === 403) throw friendly('The PIN was refused. The current one is on the TV screen.');
-    if (response.status === 429) throw friendly('Pairing is locked after too many wrong PINs. Wait five minutes.');
+    const retryAfter = response.headers.get('retry-after');
+    const wait = retryAfter ? `${retryAfter}s` : 'a minute';
+
+    if (response.status === 429) {
+        throw friendly(`This machine is locked out after too many wrong PINs. Wait ${wait}, then use the PIN on the TV screen.`);
+    }
+    if (response.status === 409) {
+        const busy = await response.json().catch(() => ({}));
+        const running = busy.installing && busy.installing.name ? ` (${busy.installing.name})` : '';
+        throw friendly(`Another install is running on the TV${running}. Try again in ${wait}.`);
+    }
 
     const result = await response.json().catch(() => null);
 

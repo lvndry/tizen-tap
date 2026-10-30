@@ -182,7 +182,9 @@ down.
 
 **Security.** The install endpoint is reachable from the network and gated
 by the PIN. The PIN can only be read over loopback, so a person has to
-relay it. Five wrong guesses lock pairing for five minutes. The sdb relay
+relay it. Five wrong guesses lock out the device that made them, for a
+minute at first and twice as long each time after, up to an hour; other
+devices with the right PIN are unaffected. The sdb relay
 is off by default, needs a second opt-in to survive reboots, and refuses
 commands that would disable it or uninstall the app.
 
