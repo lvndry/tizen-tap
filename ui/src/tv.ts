@@ -395,15 +395,20 @@ function logged({ lines, uptime }) {
     })), first);
 }
 
-// Every fourth attempt, which with the socket's backoff is a few seconds apart at first and then every
-// twelve. One launch would not be enough: a restart answers before it exits, so the launch that follows
-// the drop can reach the process on its way out and be swallowed.
+// A dropped socket is never a reason to launch. On this firmware launching a running service reloads it
+// in the same process, which drops this socket again: relaunching on every drop kept a CU7105 reloading
+// its service every three seconds, eleven thousand times. Only a service that has stayed silent through
+// several attempts is launched, every fourth attempt after that, and only a few times until it answers.
 const RELAUNCH_EVERY = 4;
+const RELAUNCH_LIMIT = 5;
+
+let relaunches = 0;
 
 function changed(status, attempt = 0) {
     if (status === 'connected') {
         say(`the service answered on port ${PORT}`, 'ok');
         store.update({ restarting: false });
+        relaunches = 0;
         return;
     }
 
@@ -416,7 +421,15 @@ function changed(status, attempt = 0) {
     if (attempt === 12) say('the service is slow to start', 'warn');
     if (attempt === 30) say('still waiting — the platform can be slow to start it', 'warn');
 
-    if (application && attempt % RELAUNCH_EVERY === 0) relaunch();
+    if (!application || attempt === 0 || attempt % RELAUNCH_EVERY !== 0) return;
+
+    if (relaunches < RELAUNCH_LIMIT) {
+        relaunches++;
+        relaunch();
+    } else if (relaunches === RELAUNCH_LIMIT) {
+        relaunches++;
+        say(`stopped launching the service after ${RELAUNCH_LIMIT} tries; restart the TV`, 'err');
+    }
 }
 
 function restart() {
