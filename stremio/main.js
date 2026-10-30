@@ -6,15 +6,19 @@
 // 11470 upward. This shim sets up the Tizen environment before requiring the
 // bundle so the server behaves the same on the TV as on a desktop:
 //
-//   - APP_PATH is forced to /home/owner/.stremio-server (created up front)
+//   - APP_PATH is the first writable of /home/owner/.stremio-server and the
+//     app's own data directory on flash; /tmp is the last resort, because
+//     on Tizen /tmp is tmpfs, so a torrent cache there is RAM taken from
+//     every other app (on a CU7105 it fell back there on every install)
 //   - a lean server-settings.json is written if none exists: a 512MB torrent
 //     cache (the television's user partition is 3.85GB total) and software
-//     transcoding (the desktop default, videotoolbox, is Apple-only)
+//     transcoding (the desktop default, videotoolbox, is Apple-only), and on
+//     every boot the cache is put back on the data path and capped at 1GB,
+//     whatever a client changed it to
 //   - listen() is patched so the primary port is always 11470, the port a
 //     Stremio client on the LAN expects, instead of first-free-from-11470
-//   - every boot stage appends a line to /home/owner/.stremio-server-boot.log,
-//     so a silent crash is diagnosable from the homebrew service, which can
-//     read /home/owner
+//   - every boot stage appends a line to boot.log in the data path, so a
+//     silent crash is diagnosable afterwards
 //
 // Everything else — the HTTP API, the addon proxy, the WebTorrent engine — is
 // the unmodified desktop bundle.
@@ -28,11 +32,30 @@ const os = require('os');
 
 const PORT = 11470;
 
-const crashLog = '/home/owner/.stremio-server-boot.log';
+const CACHE_DEFAULT = 536870912;
+const CACHE_CEILING = 1073741824;
+
+// Tizen installs an app under /opt/usr/apps/<package>/ and gives it a writable
+// data directory on the same flash partition.
+const packageId = (/\/apps\/([^/]+)\//.exec(__dirname) || [])[1];
+
+const candidates = [
+    '/home/owner/.stremio-server',
+    packageId ? '/opt/usr/home/owner/apps_rw/' + packageId + '/data/stremio-server' : null,
+    path.join(os.tmpdir(), 'stremio-server')
+].filter(Boolean);
+
+const pending = [];
+let crashLog = null;
 
 const note = (msg) => {
+    const line = '[' + new Date().toISOString() + '] ' + msg + '\n';
+    if (!crashLog) {
+        pending.push(line);
+        return;
+    }
     try {
-        fs.appendFileSync(crashLog, '[' + new Date().toISOString() + '] ' + msg + '\n');
+        fs.appendFileSync(crashLog, line);
     } catch (e) {
         // the log must never kill the boot
     }
@@ -40,16 +63,21 @@ const note = (msg) => {
 
 note('start pid=' + process.pid);
 
-let dataPath = '/home/owner/.stremio-server';
+const dataPath = candidates.find((candidate) => {
+    try {
+        fs.mkdirSync(candidate, { recursive: true });
+        fs.accessSync(candidate, fs.constants.W_OK);
+        return true;
+    } catch (e) {
+        note('not writable: ' + candidate + ' (' + (e && e.code) + ')');
+        return false;
+    }
+});
 
-try {
-    fs.mkdirSync(dataPath, { recursive: true });
-} catch (e) {
-    // fall back to the app's own writable sandbox if /home/owner refuses
-    note('home/owner not writable: ' + (e && e.message));
-    dataPath = path.join(os.tmpdir(), 'stremio-server');
-    fs.mkdirSync(dataPath, { recursive: true });
-}
+crashLog = path.join(dataPath, 'boot.log');
+pending.splice(0).forEach((line) => note(line.replace(/^\[[^\]]+\] /, '').replace(/\n$/, '')));
+
+if (dataPath.indexOf(os.tmpdir()) === 0) note('WARNING: caching in ' + dataPath + ', which is RAM on Tizen');
 
 process.env.APP_PATH = dataPath;
 
@@ -68,7 +96,7 @@ if (!fs.existsSync(settingsFile)) {
         cacheRoot: dataPath,
         cacheRootVersion: 0,
         cacheRootsToClean: [],
-        cacheSize: 536870912,
+        cacheSize: CACHE_DEFAULT,
         btMaxConnections: 55,
         btHandshakeTimeout: 20000,
         btRequestTimeout: 4000,
@@ -90,6 +118,18 @@ if (!fs.existsSync(settingsFile)) {
 
     fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 4));
     note('settings written');
+}
+
+try {
+    const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    const cacheSize = settings.cacheSize === null || settings.cacheSize > CACHE_CEILING ? CACHE_DEFAULT : settings.cacheSize;
+
+    if (settings.cacheRoot !== dataPath || settings.appPath !== dataPath || cacheSize !== settings.cacheSize) {
+        fs.writeFileSync(settingsFile, JSON.stringify({ ...settings, appPath: dataPath, cacheRoot: dataPath, cacheSize }, null, 4));
+        note('settings corrected: cache in ' + dataPath + ', ' + Math.round(cacheSize / 1048576) + 'MB');
+    }
+} catch (e) {
+    note('could not check settings: ' + (e && e.message));
 }
 
 // The bundle listens on 11470 and retries 11471, 11472... until one is free.

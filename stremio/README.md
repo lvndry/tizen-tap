@@ -60,9 +60,16 @@ That's the whole setup. From then on the TV streams with nothing else on.
 | 000, homebrew = 200 | Server process died | Open Tizen Tap again — the revive fires on its start. Still dead? The package may be gone (TV self-updates have been known to wipe it): re-run step 1 |
 | App can't connect, `:11470` = 307 from the LAN | App pointed at `127.0.0.1`, or the TV's IP changed | Re-check the app's server address (step 2); check the reservation (step 3) |
 
-The server writes a boot log to `/home/owner/.stremio-server-boot.log` when
-launched through the page; the homebrew service's own logs record every
+The server writes a boot log to `boot.log` in its data path,
+`/opt/usr/home/owner/apps_rw/S6K2WQ8MnP/data/stremio-server/` on the
+CU7105 (readable as root); the homebrew service's own logs record every
 revive attempt (search for `stremio`).
+
+The torrent cache lives in that data path too, on flash, capped at 1 GB
+(512 MB by default). It must not live in `/tmp`: on Tizen that is tmpfs, so
+a cache there is RAM taken from every app, and a 2 GB cache in `/tmp` is
+how a streaming session starts the out-of-memory killer. The shim puts the
+cache back on flash and re-applies the cap on every boot.
 
 ## Layout
 
