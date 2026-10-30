@@ -19,7 +19,6 @@ export type Options = {
 const ACCENT = "#7dd3fc";
 const GOOD = "#86efac";
 const BAD = "#fca5a5";
-const WARN = "#fcd34d";
 
 export const createApp = (renderer: CliRenderer, options: Options = {}) => {
 const local = options.wgt || null;

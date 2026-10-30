@@ -38,12 +38,10 @@ function fakeAgent(port, { uid = 0 } = {}) {
         const socket = net.connect(port, '127.0.0.1');
         let buffered = Buffer.alloc(0);
         let nonce = null;
-        let seq = 0;
 
         const send = (payload) => socket.write(encode(SECRET, nonce, payload));
 
         const answer = (parts) => {
-            seq += 1;
             const verb = parts[0];
             const theirSeq = parts[1];
 
