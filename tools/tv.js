@@ -2,7 +2,7 @@
 
 const { networkInterfaces } = require('os');
 
-const sdb = require('../service/src/tv/sdb.js');
+const sdb = require('../service/src/tv/sdb.ts');
 
 const PORT = 8091;
 
