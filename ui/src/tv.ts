@@ -103,39 +103,25 @@ function post(path) {
 });
 }
 
-// The Control API cannot say why the app was opened (the web runtime has no launch parameters), so the
-// page decides for itself: once the greeting proves the service is up, a page nobody has reached for
-// within one beat has done its only job and exits. A hidden page would keep a whole web runtime resident
-// (110 MB on a CU7105) with its JavaScript paused, doing nothing an exited one does not.
-// Nothing in the service needs this page: it is its own application, kept up by config.xml's on-boot and
-// auto-restart; the socket only feeds this screen; the pairing code is minted and kept by the service; and
-// this page's relaunch watchdog never ran while hidden. Pressing 'homebrew' on the remote opens it again.
-let hasSelfExited = false;
-let touched = false;
+// The page never closes itself while it is on screen. It exits when it stops being visible (Home, or
+// another app taking over), because Tizen keeps a backgrounded page fully resident (110 MB on a CU7105)
+// and running. Nothing in the service needs this page: it is its own application, kept up by
+// config.xml's on-boot and auto-restart; the socket only feeds this screen; and the pairing code is
+// minted and kept by the service.
+function exitWhenHidden() {
+    if (!document.hidden || leaving || !application) return;
 
-function selfExit() {
-    if (hasSelfExited) return;
-    hasSelfExited = true;
+    say('the screen went to the background: closing it', 'info');
 
-    setTimeout(() => {
-        if (!store.get().pin || leaving || touched) return;
-
-        say('service is up, nobody is watching: closing this screen', 'info');
-
-        try {
-            leave();
-        } catch (exitError) {
-            leaving = false;
-            say(`exit failed: ${exitError.message || exitError}; going to the background instead`, 'warn');
-
-            try {
-                application.hide();
-            } catch (hideError) {
-                say(`backgrounding failed: ${hideError.message || hideError}`, 'warn');
-            }
-        }
-    }, 4000);
+    try {
+        leave();
+    } catch (exitError) {
+        leaving = false;
+        say(`exit failed: ${exitError.message || exitError}`, 'warn');
+    }
 }
+
+document.addEventListener('visibilitychange', exitWhenHidden);
 
 const SERVICE_ID = application ? `${application.appInfo.packageId}.TizenHomebrewService` : null;
 
@@ -223,12 +209,10 @@ const SCROLLS: Record<number, [number, boolean]> = {
 
 const keys = remote({
     onBack: () => {
-        touched = true;
         return store.get().view === 'main' ? leave() : close();
     },
 
     onKey: (keyCode: number) => {
-        touched = true;
         const { view } = store.get();
         // The red key only has a job inside the log: jump to the newest line.
         if (keyCode === RED) {
@@ -459,7 +443,6 @@ const link = openSocket({
     url: application ? `ws://127.0.0.1:${PORT}` : null,
     onStatus: (status: string) => {
         changed(status);
-        selfExit();
     },
 
     onMessage: (type, payload) => {
