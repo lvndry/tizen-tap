@@ -52,34 +52,47 @@ pure-JS WebTorrent on Tizen's Node 18, zero native modules, cache capped at
 
 ## The Stremio client (the TV app)
 
-The app with the icon you watch with is a separate package — this repo
-ships only the server above. On this TV it is `newslO9NqF` v1.5.0.
+The app with the icon you watch with is a separate package; this repo
+ships only the server above.
 
-It is **not** from the Samsung Store. It is a web-shell `.wgt` from the
-public build project
-[camwhite18/stremio-tizen-builds](https://github.com/camwhite18/stremio-tizen-builds):
-a GitHub Actions bot rebuilds Stremio's web app for Tizen on every upstream
-release and publishes the `.wgt` as a release asset. For a 2019+ TV (Tizen
-4+, including the CU7105) the asset is `Stremio-main.wgt` from the latest
-release (the tag is a timestamp).
+**Use the official app from Samsung's store.** Stremio publishes it for
+2019+ Samsung TVs (Tizen 5+). On the CU7105 it is package `IkWsFHtOY9`
+(app `IkWsFHtOY9.Stremio`), v1.11.1 as of 2026-10-30. It is current and
+Samsung keeps it updated. Install it on the TV: **Apps**, search
+"Stremio", **Install**. After a Smart Hub reset the Apps tile can be
+missing from the home bar until Smart Hub is set up again; the store app
+is `com.samsung.tv.store` and can also be opened remotely:
 
-Install it through the homebrew service like any other package (it re-signs
-for this TV, so the same `~/.tizen-certs` pair covers it):
+```sh
+curl -X POST -H "x-homebrew-pin: 000000" --data-binary \
+  "new Promise((done) => tizen.application.launch('com.samsung.tv.store', () => done('ok'), (e) => done(e.message)))" \
+  http://<tv-ip>:8091/dev/eval     # developer builds only
+```
+
+The store app also installs a background part, `IkWsFHtOY9.StremioService`.
+It is not used for streaming here: the client talks to this repo's server.
+
+**If the store does not list Stremio** (the rollout was regional), the
+fallback is a sideloaded build from
+[camwhite18/stremio-tizen-builds](https://github.com/camwhite18/stremio-tizen-builds).
+Prefer `Stremio.wgt` (stable). Note that project stopped publishing in
+March 2026 while Stremio's web app kept moving, so its builds lag behind.
+Avoid `Stremio-WebWrapper.wgt`: it frames Stremio's old v4 shell
+(`app.strem.io/shell-v4.4`), and as an HTTPS page it cannot reach this
+plain-HTTP server without the server's remote HTTPS option.
 
 ```sh
 curl -L -o /tmp/stremio-client.wgt \
-  https://github.com/camwhite18/stremio-tizen-builds/releases/latest/download/Stremio-main.wgt
-curl -X POST --data-binary @/tmp/stremio-client.wgt -H "x-homebrew-pin: <pin>" \
-  http://<tv-ip>:8091/install
+  https://github.com/camwhite18/stremio-tizen-builds/releases/latest/download/Stremio.wgt
+npm run install-app -- <tv-ip> /tmp/stremio-client.wgt --pin <pin>
 ```
-
-A Smart Hub reset removes the client along with everything else
-sideloaded — these two commands put it back.
 
 After install:
 
-- **Server address** — in the app, *Settings → Streaming server* →
-  `<tv-ip>:11470` (step 2 above; LAN address, not loopback).
+- **Server address**: in the app, *Settings → Streaming server* →
+  `http://<tv-ip>:11470` (step 2 above; the LAN address, never `127.0.0.1`,
+  because every Tizen app has its own loopback). Verified with the store
+  app on the CU7105: it then connects over plain HTTP.
 - **Addons** — in *Settings → Add-ons*, import a Stremio export JSON
   (the app's own *Settings → Add-ons → Export* produces that format).
   The client keeps its addon list in its own `localStorage`, not on the

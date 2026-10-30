@@ -203,7 +203,7 @@ This repo also ships the TV's Stremio streaming server ([stremio/](stremio/)).
 Treat these as load-bearing, not guesses:
 
 - **The server listens on `11470`.** It is a separate app from Tizen Tap
-  and from the Stremio *client* (`newslO9NqF`). The client points at it by the
+  and from the Stremio *client* (the official store app, `IkWsFHtOY9.Stremio`). The client points at it by the
   TV's **LAN IP** (`<tv-ip>:11470`), never `127.0.0.1`.
 - **`127.0.0.1` is per-app on Tizen.** Every app is in its own network sandbox,
   so the client's loopback is not the server's loopback. If someone reports
