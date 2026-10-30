@@ -1,8 +1,8 @@
 // The root endpoints: /dev/root reports the channel's state, /dev/root/arm
-// fires the injection that runs the launcher under sdbd's privileges, and
-// /dev/root/exec runs a line of /bin/sh as uid 0 through the connected agent.
+// fires the injection that runs the launcher under sdbd's privileges,
+// /dev/root/exec runs a line of /bin/sh as uid 0 through the connected agent,
+// and /dev/root/release hands sdbd's single client session back.
 // /dev/root/developer-ip reads or switches sdbd's Host PC IP gate, and
-// /dev/processes is the whole TV's process table by memory.
 //
 // The feature routes never arm: every arm cycle pushes an agent through sdbd,
 // and enough of them lock sdbd out, so they answer "root not connected"
@@ -102,6 +102,22 @@ function register(ctx, router) {
                 timedOut: result.timedOut,
                 output: (result.stdout + (result.stderr ? '\n[stderr]\n' + result.stderr : '')).slice(0, 12000)
             });
+        } catch (error) {
+            json(response, { ok: false, error: error.message });
+        }
+    });
+
+    // The connected agent holds sdbd's single client session, and while it
+    // does, the installer's sdb probe finds it held and falls back to the
+    // root (pkgcmd) route, which installs but does not register the app.
+    // Releasing lets a pending install go over sdb and register properly.
+    router.on.post('/dev/root/release', async (request, response) => {
+        if (!gate(request, response)) return;
+
+        ctx.svc.warn(`root release from ${host(request.socket && request.socket.remoteAddress)}`);
+        try {
+            await root.channel.release();
+            json(response, { ok: true });
         } catch (error) {
             json(response, { ok: false, error: error.message });
         }
