@@ -162,8 +162,9 @@ then `token.txt` is the key. Installing from a checkout of this repo is
   playing.
 - **Everything is idempotent by preference.** `GET /packages` before `/install`
   if you can; a reinstall is cheap, a lost state is not.
-- **The PIN rotates on every app open.** Cache it for the session, refresh it
-  on 403, and never write it anywhere `token.txt` would not be.
+- **The PIN is minted once and kept across restarts.** Cache it, refresh it
+  on 403 (a wipe such as a Smart Hub reset mints a new one), and never write it anywhere
+  `token.txt` would not be.
 
 ## The Stremio companion (`S6K2WQ8MnP.StremioServer`)
 
