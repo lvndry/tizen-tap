@@ -51,7 +51,7 @@ const main = async () => {
         },
         body: archive,
         signal: AbortSignal.timeout(300000)
-    }).catch((e) => { throw friendly(`Tizen Tap did not answer on ${host}:${PORT} — ${e.message}`); });
+    }).catch((e) => { throw friendly(`Tizen Tap did not answer on ${host}:${PORT}: ${e.message}`); });
 
     if (response.status === 403) throw friendly('The PIN was refused. The current one is on the TV screen.');
     if (response.status === 429) throw friendly('Pairing is locked after too many wrong PINs. Wait five minutes.');
@@ -71,7 +71,7 @@ const main = async () => {
         const launched = await fetch(`http://${host}:8001/api/v2/applications/${result.appId}`, { method: 'POST' })
             .catch(() => null);
         if (launched && launched.ok) ui.ok('launch', result.appId);
-        else ui.warn(`installed, but launching ${result.appId} failed — open it from the TV`);
+        else ui.warn(`installed, but launching ${result.appId} failed. Open it from the TV`);
     }
 
     ui.blank();

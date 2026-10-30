@@ -96,6 +96,7 @@ paired. The TV screen always shows it.
 For scripts and agents, [AGENTS.md](AGENTS.md) lists every endpoint and
 command, and what each failure looks like. The on-screen log shows the
 same records that `GET /logs?since=<seq>` returns as JSON.
+If `:8091` stops answering, see [docs/troubleshooting.md](docs/troubleshooting.md).
 
 Related: [stremio/README.md](stremio/README.md) sets up the TV's streaming
 server in about five minutes. [samsung-tv-toolbox](https://github.com/lvndry/samsung-tv-toolbox)
