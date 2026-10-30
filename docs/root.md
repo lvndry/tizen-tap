@@ -130,6 +130,44 @@ cat /usr/sbin/launch_sdbd.sh
 Write access is narrower: `/usr` and `/` are read-only, `/opt/usr` is
 writable.
 
+### 5. Switch the Host PC IP without the remote
+
+`POST /dev/root/developer-ip` does section 3's three commands in one call:
+it reads `db/sdk/develop/ip`, sets the new value with `buxton2ctl`, reads it
+back, answers with `{ before, after }`, and only then runs `systemctl
+restart sdbd` so sdbd loads it. No TV reboot. The root agent runs under
+sdbd, so the restart usually drops the root channel; re-arm afterwards.
+Any value other than `127.0.0.1` means the TV can no longer install its
+own apps until it is set back, and the response says so in `warning`.
+
+```sh
+curl -H "x-homebrew-pin: $PIN" http://<tv>:8091/dev/root/developer-ip
+# {"ok":true,"ip":"127.0.0.1"}
+
+curl -X POST -H "x-homebrew-pin: $PIN" -d '{"ip":"192.168.1.20"}' \
+  http://<tv>:8091/dev/root/developer-ip
+# {"ok":true,"before":"127.0.0.1","after":"192.168.1.20","restart":"...","warning":"..."}
+```
+
+The ip must be a dotted quad with each octet 0-255 and no leading zeros;
+anything else is a 400 and nothing is touched.
+
+### 6. See the whole process table
+
+`GET /dev/processes` is `ps` sorted by memory, from root's view of
+`/proc`, in one exec: the top `limit` processes (default 25, at most 500)
+by RSS, each with its kernel `name`, the `exe` from its command line (the
+AUL blobs after the path are dropped), `rss_mb`, `oom_score_adj` (read
+only) and `ours` (the path contains `GJBBYNLkgP` or `S6K2WQ8MnP`), plus
+the `/proc/meminfo` summary and the recent OOM-killer lines from `dmesg`.
+
+```sh
+curl -H "x-homebrew-pin: $PIN" "http://<tv>:8091/dev/processes?limit=10"
+```
+
+Both endpoints answer `root not connected` instead of arming when the
+channel is down, because every arm cycle counts toward the lockout below.
+
 ### Batch your arm cycles
 
 The root channel itself is cheap, but each arm cycle pushes a signed agent

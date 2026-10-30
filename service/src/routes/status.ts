@@ -69,6 +69,12 @@ function noteArmError(message) {
     lastArmError = message ? String(message) : null;
 }
 
+// A Host PC IP switch restarts sdbd, which usually drops the root channel, so
+// the value it wrote is the last one anything can read until root re-arms.
+function noteDeveloperIp(ip) {
+    lastKnown = { ip, mode: lastKnown.mode };
+}
+
 // buxton2ctl prints `key = Type: value`, one property per line. Only the two
 // developer-mode properties matter; anything unrecognised is left null rather
 // than guessed.
@@ -553,6 +559,6 @@ function register(ctx, router) {
 }
 
 module.exports = {
-    register, buildStatus, diagnose, parseBuxton2, noteArmError, realScanProc, realStremio, stremioLanHost,
+    register, buildStatus, diagnose, parseBuxton2, noteArmError, noteDeveloperIp, realScanProc, realStremio, stremioLanHost,
     parseMeminfo, parseOomKills, OOM_DMESG_COMMAND, STREMIO_PKG_IDS, SDBD_PIDOF_COMMAND
 };
