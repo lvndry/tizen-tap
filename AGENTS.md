@@ -62,6 +62,8 @@ node remote.js power home ok up down left right volumeUp mute
 | `POST /dev/eval`, `/dev/sdb`, `/dev/shell` | dev builds only — raw access |
 | `POST /dev/root/exec` | run a line of `/bin/sh` as uid 0 (PIN-gated) |
 | `GET /dev/root`, `POST /dev/root/arm` | root channel state / re-arm it |
+| `GET /dev/root/developer-ip`, `POST /dev/root/developer-ip` | read / set sdbd's Host PC IP (`{"ip":"<dotted quad>"}`), then restart sdbd; root required, drops the root channel |
+| `GET /dev/processes?limit=25` | top processes by RSS with oom_score_adj, meminfo summary, recent OOM kills; root required, one exec |
 
 The root channel arms itself on boot: the service fires a sdb injection that
 runs the signed agent under sdbd's privileges, and the agent dials back over

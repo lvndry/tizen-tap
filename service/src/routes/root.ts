@@ -1,8 +1,14 @@
 // The root endpoints: /dev/root reports the channel's state, /dev/root/arm
 // fires the injection that runs the launcher under sdbd's privileges, and
 // /dev/root/exec runs a line of /bin/sh as uid 0 through the connected agent.
+// /dev/root/developer-ip reads or switches sdbd's Host PC IP gate, and
+// /dev/processes is the whole TV's process table by memory.
 //
-// All three are PIN-gated like the other /dev holes. /dev/root/exec is the
+// The feature routes never arm: every arm cycle pushes an agent through sdbd,
+// and enough of them lock sdbd out, so they answer "root not connected"
+// instead and leave the arm to the caller.
+//
+// All of them are PIN-gated like the other /dev holes. /dev/root/exec is the
 // sharpest one: it is a remote shell as root, on the television, so it is
 // logged with the caller and a preview of the command, exactly like
 // /dev/shell.
@@ -12,10 +18,15 @@
 const { json, failure, readBody } = require('../http/respond.ts');
 const { host } = require('../obs/units.ts');
 const { ErrorCode } = require('../protocol.ts');
+const developer = require('../root/developer.ts');
+const processes = require('../root/processes.ts');
 
 const MAX_COMMAND = 8 * 1024;
 const EXEC_TIMEOUT_MS = 30000;
 const EXEC_TIMEOUT_MAX_MS = 300000;
+const FEATURE_EXEC_MS = 20000;
+const MAX_JSON_BODY = 1024;
+const ROOT_NOT_CONNECTED = 'root not connected; POST /dev/root/arm first';
 
 function preview(source) {
     return source.replace(/\s+/g, ' ').slice(0, 200);
@@ -30,6 +41,17 @@ function register(ctx, router) {
 
         failure(response, verdict.code === ErrorCode.LOCKED_OUT ? 429 : 403, verdict.code, verdict.message);
         return false;
+    }
+
+    function connected(response) {
+        if (root.channel.status().root) return true;
+
+        json(response, { ok: false, error: ROOT_NOT_CONNECTED });
+        return false;
+    }
+
+    function exec(command, timeout = FEATURE_EXEC_MS) {
+        return root.channel.exec(command, timeout);
     }
 
     router.on.get('/dev/root', (request, response) => {
@@ -81,6 +103,56 @@ function register(ctx, router) {
                 timedOut: result.timedOut,
                 output: (result.stdout + (result.stderr ? '\n[stderr]\n' + result.stderr : '')).slice(0, 12000)
             });
+        } catch (error) {
+            json(response, { ok: false, error: error.message });
+        }
+    });
+
+    router.on.get('/dev/root/developer-ip', async (request, response) => {
+        if (!gate(request, response)) return;
+        if (!connected(response)) return;
+
+        try {
+            json(response, { ok: true, ip: await developer.readDeveloperIp(exec) });
+        } catch (error) {
+            json(response, { ok: false, error: error.message });
+        }
+    });
+
+    router.on.post('/dev/root/developer-ip', async (request, response) => {
+        if (!gate(request, response)) return;
+        if (!connected(response)) return;
+
+        let ip;
+        try {
+            ip = JSON.parse((await readBody(request, MAX_JSON_BODY)).toString('utf8')).ip;
+        } catch (error) {
+            return json(response, { ok: false, error: 'body must be JSON like {"ip":"127.0.0.1"}' }, 400);
+        }
+
+        ctx.svc.warn(`developer ip switch to ${String(ip)} from ${host(request.socket && request.socket.remoteAddress)}`);
+
+        await developer.changeDeveloperIp({
+            exec,
+            ip,
+            respond: (code, body) => json(response, body, code),
+            log: (line) => ctx.svc.warn(line)
+        });
+    });
+
+    router.on.get('/dev/processes', async (request, response, { query }) => {
+        if (!gate(request, response)) return;
+
+        const limit = processes.parseLimit(query.get('limit'));
+        if (limit === null) {
+            return json(response, { ok: false, error: `limit must be an integer from 1 to ${processes.MAX_LIMIT}` }, 400);
+        }
+
+        if (!connected(response)) return;
+
+        try {
+            const result = await exec(processes.PROCESSES_COMMAND);
+            json(response, { ok: true, at: new Date().toISOString(), ...processes.parseProcesses(result.stdout, limit) });
         } catch (error) {
             json(response, { ok: false, error: error.message });
         }
