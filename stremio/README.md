@@ -26,15 +26,17 @@ pure-JS WebTorrent on Tizen's Node 18, zero native modules, cache capped at
 
 ## Setup (one time, ~5 minutes)
 
-1. **Install it.** From the machine that has this repo checked out:
+1. **Install it.** From the root of a checkout of this repo, with Tizen
+   Tap already on the TV (its `:8091`) and the PIN from its screen:
 
    ```sh
-   cd stremio && node build.js          # builds release/stremio-server.wgt
-   curl -X POST --data-binary @release/stremio-server.wgt \
-        -H "x-homebrew-pin: <pin>" http://<tv-ip>:8091/install
+   node stremio/build.js                # builds release/stremio-server.wgt
+   npm run install-app -- <tv-ip> release/stremio-server.wgt --pin <pin>
    ```
 
-   Requires Tizen Tap to be installed on the TV (its `:8091`).
+   Same thing with curl: `curl -X POST --data-binary @release/stremio-server.wgt
+   -H "x-homebrew-pin: <pin>" http://<tv-ip>:8091/install`. After a Smart Hub
+   reset the server is gone; this step puts it back.
 
 2. **Point the Stremio app at it.** In the Stremio app: *Settings →
    Streaming server* → `<tv-ip>:11470`.
