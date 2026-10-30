@@ -106,6 +106,76 @@ If `:8091` still does not answer, open Tizen Tap on the TV and read the
 log lines just before `the service went away`. Do not loop step 3
 more than about three times.
 
+## Tizen Tap is gone after an update
+
+Observed on a Samsung CU7105 (Tizen 6.5) on 2026-10-30. A self-update of
+Tizen Tap was followed by the TV dropping off the network, most likely a
+restart in the middle of the swap. Afterwards:
+
+- the Control API answered 404 for `GJBBYNLkgP.TizenHomebrew`;
+- `:8091` never came back, through standby and cold boots;
+- the Stremio server (`S6K2WQ8MnP`), another sideloaded on-boot service,
+  started by itself at every boot, so on-boot services do run on this
+  firmware (a cold boot earlier that day had started Tizen Tap's too).
+
+Tizen Tap is the installer, so nothing on the TV could repair it. It took a
+computer and two unplugs (Host PC IP to the computer and back).
+
+### The rescue
+
+`rescue/` is a second, tiny package, Tizen Tap Rescue
+(`kiB8Pr8Nds.Rescue`, service `kiB8Pr8Nds.RescueService`), installed beside
+Tizen Tap (README, Install, step 8). Its service starts on boot, waits 60 s
+for the TV to settle, and checks Tizen Tap once:
+
+| Tizen Tap | The rescue |
+| --- | --- |
+| `/version` answers on the TV's LAN address | nothing |
+| installed, silent | launches `GJBBYNLkgP.TizenHomebrew`, checks again 60 s later |
+| missing, or still silent | reinstalls the last good copy over loopback sdb, launches it, checks again |
+
+It reinstalls at most once per boot, and gives up on a last-good copy that
+failed to bring Tizen Tap back twice (across boots). A healthy check, or a
+newer last-good copy, clears that count. With no LAN address it does
+nothing, because silence would then mean nothing.
+
+### The last good copy
+
+Every install of Tizen Tap leaves its signed package at
+`/home/owner/share/tmp/sdk_tools/package.wgt`: a self-update, an install
+from a phone, and `npm run bootstrap` from a computer alike. Tizen Tap
+copies its own package to `/home/owner/share/tizen-tap-rescue/candidate.wgt`
+twice over: when it stages it (before `vd_appinstall` runs), and when a
+build starts and finds its own package still staged, which is how the first
+install from a computer gets one. Once a build whose stamp the candidate
+carries has
+answered `/version` for 2 minutes, the candidate is renamed to
+`last-good.wgt`, with `last-good.json` beside it. A build that never comes
+up healthy is never promoted, so the copy is always one that ran. Writes go
+to a temp name and are renamed, so a crash never leaves half a package.
+
+### Reading what it did
+
+The rescue logs every step to
+`/home/owner/share/tizen-tap-rescue/rescue.log` and keeps its counters in
+`state.json` next to it. Once Tizen Tap answers again:
+
+```sh
+curl -H "x-homebrew-pin: <pin>" http://<tv-ip>:8091/dev/status   # .rescue, last 10 log lines
+curl -X POST -H "x-homebrew-pin: <pin>" --data 'tail -n 60 /home/owner/share/tizen-tap-rescue/rescue.log' http://<tv-ip>:8091/dev/root/exec
+```
+
+While Tizen Tap is still down, opening the rescue runs a check now (5 s
+settle instead of 60), within the same limits:
+
+```sh
+node app.js kiB8Pr8Nds.Rescue
+```
+
+If the log says `no last-good copy` or `giving up`, the copy cannot help:
+reinstall from a computer (README, Install). That install leaves a fresh
+staged package, which becomes the next last-good copy.
+
 ## The service reloads every 3 seconds (fixed in #6)
 
 Found on the CU7105 on 2026-10-30, running build `0.2.2+edb0be3`.

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Tizen Tap Rescue</title>
+</head>
+<body>
+<!-- Not a UI: opening the app asks the service for a manual check, then the
+     page exits so no web runtime stays resident for nothing. -->
+<script>
+'use strict';
+
+(function () {
+    var leave = function () {
+        try {
+            tizen.application.getCurrentApplication().exit();
+        } catch (exitError) {
+            try {
+                tizen.application.getCurrentApplication().hide();
+            } catch (hideError) { }
+        }
+    };
+
+    setTimeout(function () {
+        try {
+            tizen.application.launchAppControl(
+                new tizen.ApplicationControl('http://tizen.org/appcontrol/operation/service'),
+                'kiB8Pr8Nds.RescueService',
+                leave,
+                leave
+            );
+        } catch (e) {
+            leave();
+        }
+    }, 500);
+})();
+</script>
+</body>
+</html>

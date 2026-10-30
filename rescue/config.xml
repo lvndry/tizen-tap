@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns:tizen="http://tizen.org/ns/widgets" xmlns="http://www.w3.org/ns/widgets" id="https://tizentaprescue.local" version="1.0.0" viewmodes="maximized">
+    <access origin="*" subdomains="true"></access>
+    <tizen:application id="kiB8Pr8Nds.Rescue" package="kiB8Pr8Nds" required_version="3.0"/>
+    <author>Tizen Tap</author>
+    <content src="index.html"/>
+    <feature name="http://tizen.org/feature/screen.size.all"/>
+    <feature name="http://tizen.org/feature/web.service"/>
+    <icon src="icon.png"/>
+    <name>Tizen Tap Rescue</name>
+
+    <!-- internet: probe Tizen Tap on the LAN address and reach sdbd on loopback.
+         application.launch: launch Tizen Tap, and the page starts this service.
+         unlimitedstorage: the last-good copy and the log in /home/owner/share. -->
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+    <tizen:privilege name="http://tizen.org/privilege/unlimitedstorage"/>
+
+    <tizen:profile name="tv-samsung"/>
+
+    <!-- A web package needs a UI application, so index.html is a trigger page
+         that starts the service and exits. The service is the rescue: on-boot
+         runs it with the TV, which is the moment a broken self-update shows. -->
+    <tizen:service id="kiB8Pr8Nds.RescueService" auto-restart="true" on-boot="true">
+        <tizen:content src="main.js"/>
+        <tizen:name>RescueService</tizen:name>
+        <tizen:description>Reinstalls Tizen Tap from its last good copy when it does not come back after a boot.</tizen:description>
+    </tizen:service>
+
+    <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" encryption="disable" install-location="auto"/>
+</widget>

@@ -6,7 +6,7 @@
 // questions unauthenticated so a browser tab can tell the service is alive.
 //
 // GET /dev/status (PIN-gated) is the doctor's view: it probes sdbd, the root
-// channel, the companion services, memory and the boot clock, then answers one
+// channel, the companion services, the rescue, memory and the boot clock, then answers one
 // question — what is broken, and what does the fix look like. The memory and
 // oom blocks surface the kernel's kill log, so a service that died of memory
 // pressure can be diagnosed in the same call. Every probe is injectable into
@@ -22,6 +22,7 @@
 const { json, failure, denied } = require('../http/respond.ts');
 const { ErrorCode } = require('../protocol.ts');
 const { recentLaunches } = require('../launches.ts');
+const { describeRescue, RESCUE_APP_ID } = require('../rescue/lastgood.ts');
 
 const SDBD_PORT = 26101;
 const STREMIO_PORT = 11470;
@@ -169,6 +170,11 @@ const MSG_STREMIO_OOM = 'Stremio server is down and the kernel\'s OOM killer has
 const MSG_PREVIOUS_ABRUPT = 'the previous run ended without an exit record (killed, e.g. by the out-of-memory ' +
     'killer, or power loss); GET /logs/previous has its last lines.';
 
+const MSG_RESCUE_MISSING = `the rescue app (${RESCUE_APP_ID}) is not installed, so an update that breaks ` +
+    'Tizen Tap leaves nothing on the TV to repair it: npm run install-app -- <tv-ip> release/rescue.wgt --pin <pin>.';
+const MSG_NO_LAST_GOOD = 'there is no last-good copy of Tizen Tap for the rescue to reinstall; one is kept once a ' +
+    'build installed through Tizen Tap or bootstrap has served /version for 2 minutes.';
+
 function memoryCriticalMessage(memory) {
     return `memory pressure is critical (MemAvailable ${memory.available_mb} MB of ${memory.total_mb} MB) — ` +
         'expect services to be killed by the kernel until RAM frees up.';
@@ -207,6 +213,11 @@ function diagnose(state) {
     const primary = rules.length ? rules.shift() : 'Everything looks healthy.';
 
     if (state.previousRun && state.previousRun.endedCleanly === false) rules.push(MSG_PREVIOUS_ABRUPT);
+
+    // Never the lead: a missing safety net is not what is broken now. Off a
+    // television `installed` is null and nothing is said.
+    if (state.rescue && state.rescue.installed === false) rules.push(MSG_RESCUE_MISSING);
+    if (state.rescue && state.rescue.installed !== null && !state.rescue.lastGood) rules.push(MSG_NO_LAST_GOOD);
 
     if (rules.length === 0) return primary;
     // Each rule already ends in a period; strip them for the joined list and add one.
@@ -287,6 +298,7 @@ async function buildStatus(probes) {
         oom,
         launches: probes.launches(),
         previousRun: probes.previousRun ? probes.previousRun() : null,
+        rescue: probes.rescue ? probes.rescue() : null,
         boot: {
             uptime_s: typeof uptime === 'number' ? Math.round(uptime) : null,
             // This firmware's power button is deep sleep, so a fresh /proc/uptime is the only
@@ -400,6 +412,20 @@ function realStremio(host, port) {
     });
 }
 
+
+function realRescue(onTv) {
+    let installed: boolean | null = null;
+
+    if (onTv) {
+        try {
+            installed = !!(globalThis as any).tizen.application.getAppInfo(RESCUE_APP_ID);
+        } catch (e) {
+            installed = false;
+        }
+    }
+
+    return describeRescue({ fs: require('fs'), installed });
+}
 
 function realUptimeSeconds() {
     try {
@@ -547,6 +573,7 @@ function register(ctx, router) {
                 meminfo: realMeminfo,
                 launches: () => recentLaunches(10),
                 previousRun: () => ctx.recorded.previousRun(),
+                rescue: () => realRescue(device.onTv),
                 recentErrors: () => realRecentErrors(ctx.recorded)
             }));
         } catch (error) {
@@ -560,5 +587,5 @@ function register(ctx, router) {
 
 module.exports = {
     register, buildStatus, diagnose, parseBuxton2, noteArmError, noteDeveloperIp, realScanProc, realStremio, stremioLanHost,
-    parseMeminfo, parseOomKills, OOM_DMESG_COMMAND, STREMIO_PKG_IDS, SDBD_PIDOF_COMMAND
+    parseMeminfo, parseOomKills, OOM_DMESG_COMMAND, STREMIO_PKG_IDS, SDBD_PIDOF_COMMAND, MSG_RESCUE_MISSING, MSG_NO_LAST_GOOD
 };

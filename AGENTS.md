@@ -223,3 +223,22 @@ Treat these as load-bearing, not guesses:
 - **It has been wiped by TV self-updates.** If `GET /packages` no longer lists
   `S6K2WQ8MnP`, reinstall from `release/stremio-server.wgt`. The
   client app surviving does not mean the server did.
+
+## The rescue companion (`kiB8Pr8Nds.Rescue`)
+
+A separate tiny package ([rescue/](rescue/)) that repairs Tizen Tap after a
+boot. Its on-boot service waits 60 s, probes `:8091/version` on the TV's
+LAN IPv4, launches `GJBBYNLkgP.TizenHomebrew` if the service is silent, and
+reinstalls `/home/owner/share/tizen-tap-rescue/last-good.wgt` over loopback
+sdb if the app is missing or still silent. At most one reinstall per boot,
+and it gives up on a copy that failed twice. Tizen Tap keeps that copy
+itself: its own staged package, promoted after 2 minutes of healthy uptime.
+
+- **Tizen Tap down, rescue installed?** `node app.js kiB8Pr8Nds.Rescue`
+  runs a check now. Do not loop it: the limits hold, so a second run only
+  logs why it does nothing.
+- **What did it do?** `rescue.log` in the same directory; `GET /dev/status`
+  serves its last lines under `rescue`, plus the last-good build, size and
+  date, and an `Also:` line if the rescue or the copy is missing.
+- See [docs/troubleshooting.md](docs/troubleshooting.md), "Tizen Tap is gone
+  after an update".

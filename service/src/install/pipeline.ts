@@ -64,7 +64,7 @@ function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createInstaller({ sdb, device, config, resigner, store, log, rootChannel = null as any, rearmRoot = null as any }) {
+function createInstaller({ sdb, device, config, resigner, store, log, rootChannel = null as any, rearmRoot = null as any, keepCandidate = null as any }) {
     const say = log ? log.on('pkg') : QUIET;
     const sdbSays = log ? log.on('sdb') : QUIET;
 
@@ -181,6 +181,9 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
             const stagedPath = installer.stage(carried.archive, carried.identity);
 
             say.ok(`staged ${size(carried.archive.length)} to ${stagedPath}`);
+
+            // The rescue's last-good copy starts here; the new build promotes it once it runs.
+            if (keepCandidate && carried.identity.packageId === SELF_PACKAGE_ID) keepCandidate(carried.archive);
 
             return { ...carried, stagedPath };
         };
