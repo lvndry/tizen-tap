@@ -330,6 +330,31 @@ const run = async () => {
 
     {
         const store = createStore({ installing: false, catalog: [] });
+        const channel = fakeChannel();
+        let sdbTried = false;
+        const sdb = heldSdb();
+        const untouched = new Proxy(sdb, {
+            get(target, name) {
+                const value = target[name];
+                if (typeof value !== 'function') return value;
+                return (...args) => { sdbTried = true; return value.apply(target, args); };
+            }
+        });
+        const { install } = createInstaller({
+            sdb: untouched, config: fakeConfig({ author: 'present' }), resigner: fakeResigner, store,
+            device: fakeDevice({ ready: false, reason: 'sdbUnreachable', sdbError: 'sdbTimeout' }),
+            rootChannel: channel
+        });
+
+        const outcome = await install({ source: 'upload', upload: otherUpload() }).catch((e) => e);
+        check('a probe that timed out while the root agent holds sdbd installs through root',
+            outcome.route === 'root' && outcome.packageId === 'ACME000001', JSON.stringify(outcome));
+        check('and never tries sdb for the install, so nothing can race the root install',
+            !sdbTried && channel.seen.commands.length === 1, JSON.stringify({ sdbTried, commands: channel.seen.commands }));
+    }
+
+    {
+        const store = createStore({ installing: false, catalog: [] });
         const { install } = createInstaller({
             sdb: heldSdb(), device: fakeDevice(), config: fakeConfig({ author: 'present' }),
             resigner: fakeResigner, store, rootChannel: fakeChannel({ root: false })
