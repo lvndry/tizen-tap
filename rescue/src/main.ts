@@ -2,10 +2,11 @@
 //
 // on-boot starts it with the TV. It runs one check (see rescue.ts), writes
 // what it did to /home/owner/share/tizen-tap-rescue/rescue.log, and then
-// idles: a service that exits under auto-restart can be started again in a
-// loop, and an idle process with nothing in memory costs little. Opening the
-// Rescue app from the drawer (or `app.js kiB8Pr8Nds.Rescue`) reaches onRequest
-// and runs a manual check, still within the per-boot and on-disk limits.
+// stays up serving :8093 (see server.ts): a service that exits under
+// auto-restart can be started again in a loop, and the idle server holds
+// nothing but a socket. Opening the Rescue app from the drawer (or
+// `app.js kiB8Pr8Nds.Rescue`) reaches onRequest and runs a manual check,
+// still within the per-boot and on-disk limits.
 
 'use strict';
 
@@ -13,12 +14,15 @@ const fs = require('fs');
 
 const sdb = require('../../service/src/tv/sdb.ts');
 const {
-    RESCUE_DIR, RESCUE_LOG, RESCUE_STATE, LAST_GOOD, writeAtomically, readJson, lanIpv4, probeVersion
+    RESCUE_DIR, RESCUE_LOG, RESCUE_STATE, RESCUE_PORT, LAST_GOOD, TIZEN_TAP_APP_ID, TIZEN_TAP_CONFIG,
+    writeAtomically, readJson, lanIpv4, probeVersion
 } = require('../../service/src/rescue/lastgood.ts');
 const { createRescue, createReinstall } = require('./rescue.ts');
+const { resolvePin, createGate, createInstall, createServer, createPinGate } = require('./server.ts');
 
+const BUILD = '__RESCUE_BUILD__';
 const LOG_CEILING = 256 * 1024;
-const IDLE_TICK_MS = 3600000;
+const HEALTH_PROBE_MS = 2000;
 
 function note(message) {
     try {
@@ -92,12 +96,24 @@ function lastGoodKey() {
     }
 }
 
+const gate = createGate();
+const reinstallLastGood = createReinstall({ readArchive: () => fs.readFileSync(LAST_GOOD), sdb, log: note });
+
 const rescue = createRescue({
     probe: (host) => probeVersion(host),
     lanHost: () => lanIpv4(),
     appInstalled,
     launch,
-    reinstall: createReinstall({ readArchive: () => fs.readFileSync(LAST_GOOD), sdb, log: note }),
+    reinstall: async () => {
+        const release = gate.enter('boot reinstall');
+        if (!release) throw Object.assign(new Error('an install through :8093 is running'), { code: 'installBusy' });
+
+        try {
+            await reinstallLastGood();
+        } finally {
+            release();
+        }
+    },
     lastGoodKey,
     state,
     wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -105,13 +121,41 @@ const rescue = createRescue({
     bootId: readBootId()
 });
 
-let idle: any = null;
+const readConfig = () => readJson(fs, TIZEN_TAP_CONFIG);
+
+const handle = createServer({
+    health: async () => {
+        const host = lanIpv4();
+
+        return {
+            ok: true,
+            rescue: BUILD,
+            tizenTap: {
+                installed: appInstalled(TIZEN_TAP_APP_ID),
+                answering: host ? !!await probeVersion(host, undefined, HEALTH_PROBE_MS) : null
+            }
+        };
+    },
+    install: createInstall({ readConfig, sdb, launch, log: note }),
+    authorise: createPinGate({ resolve: () => resolvePin({ fs, readConfig, log: note }), log: note }),
+    gate,
+    log: note
+});
+
+let server: any = null;
+
+function listen() {
+    if (server) return;
+
+    server = require('http').createServer(handle);
+    server.on('error', (error) => note(`cannot listen on ${RESCUE_PORT}: ${error.message}`));
+    server.listen(RESCUE_PORT, '0.0.0.0', () => note(`listening on 0.0.0.0:${RESCUE_PORT}`));
+}
 
 function start() {
-    note(`rescue service starting, pid ${process.pid}, node ${process.version}`);
+    note(`rescue ${BUILD} starting, pid ${process.pid}, node ${process.version}`);
 
-    if (!idle) idle = setInterval(() => {}, IDLE_TICK_MS);
-
+    listen();
     rescue.run({ manual: false });
 }
 

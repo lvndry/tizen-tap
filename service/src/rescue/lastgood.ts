@@ -28,6 +28,7 @@ const TIZEN_TAP_PORT = 8091;
 
 const RESCUE_PACKAGE_ID = 'kiB8Pr8Nds';
 const RESCUE_APP_ID = `${RESCUE_PACKAGE_ID}.Rescue`;
+const RESCUE_PORT = 8093;
 
 const STAGED_PACKAGE = '/home/owner/share/tmp/sdk_tools/package.wgt';
 const RESCUE_DIR = '/home/owner/share/tizen-tap-rescue';
@@ -36,6 +37,11 @@ const LAST_GOOD = `${RESCUE_DIR}/last-good.wgt`;
 const LAST_GOOD_META = `${RESCUE_DIR}/last-good.json`;
 const RESCUE_LOG = `${RESCUE_DIR}/rescue.log`;
 const RESCUE_STATE = `${RESCUE_DIR}/state.json`;
+const RESCUE_PIN = `${RESCUE_DIR}/pin.json`;
+
+// Tizen Tap's own configuration: its pairing PIN, its developer mark and the
+// TV's signing pair. The rescue only ever reads it.
+const TIZEN_TAP_CONFIG = '/home/owner/share/homebrewConfig.json';
 
 const HEALTHY_UPTIME_MS = 120000;
 const PROBE_TIMEOUT_MS = 5000;
@@ -262,7 +268,7 @@ function describeRescue({ fs, installed }) {
 }
 
 module.exports = {
-    SELF_PACKAGE_ID, TIZEN_TAP_APP_ID, TIZEN_TAP_PORT, RESCUE_PACKAGE_ID, RESCUE_APP_ID,
-    STAGED_PACKAGE, RESCUE_DIR, CANDIDATE, LAST_GOOD, LAST_GOOD_META, RESCUE_LOG, RESCUE_STATE,
+    SELF_PACKAGE_ID, TIZEN_TAP_APP_ID, TIZEN_TAP_PORT, RESCUE_PACKAGE_ID, RESCUE_APP_ID, RESCUE_PORT,
+    STAGED_PACKAGE, RESCUE_DIR, CANDIDATE, LAST_GOOD, LAST_GOOD_META, RESCUE_LOG, RESCUE_STATE, RESCUE_PIN, TIZEN_TAP_CONFIG,
     HEALTHY_UPTIME_MS, carriesBuild, keepCandidate, writeAtomically, readJson, lanIpv4, probeVersion, createKeeper, describeRescue
 };

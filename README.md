@@ -105,6 +105,26 @@ a keypad).
    Two minutes after Tizen Tap starts, `/dev/status` lists `rescue.lastGood`;
    until then its `diagnosis` carries an `Also:` line saying there is none.
 
+   The rescue is also a second way in. It serves an installer on port
+   `8093` that works while Tizen Tap is down, so a broken Tizen Tap can be
+   replaced without Developer Mode or a reboot:
+
+   ```sh
+   curl http://<tv-ip>:8093/health
+   npm run install-app -- <tv-ip> release/homebrew.wgt --pin <pin> --rescue
+   ```
+
+   It answers `GET /health` and a PIN-gated `POST /install`, nothing else.
+   The PIN is the one Tizen Tap uses: `000000` when Tizen Tap is a developer
+   build, otherwise the pairing PIN Tizen Tap stored. If Tizen Tap never
+   stored one, the rescue mints its own once, keeps it in
+   `/home/owner/share/tizen-tap-rescue/pin.json` and writes it to
+   `rescue.log` there. Five wrong PINs lock that address out, longer each
+   time, as on `:8091`. When Tizen Tap's certificate pair is stored, the
+   rescue re-signs the package for this TV the way Tizen Tap does; without
+   one, send a package already signed for this TV (`npm run package --
+   --sign`).
+
 From then on the TV installs its own apps, and Host PC IP stays
 `127.0.0.1`. You only repeat these steps to reinstall tizen-tap from a
 computer, for example after a **Smart Hub reset**, which deletes every

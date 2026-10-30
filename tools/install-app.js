@@ -7,6 +7,9 @@ const ui = require('./ui.js');
 const { parse } = require('./args.js');
 
 const PORT = 8091;
+
+// The rescue's own installer, for when Tizen Tap itself is what is broken.
+const RESCUE_PORT = 8093;
 const DEFAULT_PIN = '000000';
 
 const friendly = (message) => Object.assign(new Error(message), { isFriendly: true });
@@ -58,18 +61,20 @@ const main = async () => {
     const args = parse(process.argv.slice(2), ['--pin', '--name']);
     const [host, source] = args.positionals;
     const pin = args.value('--pin') || DEFAULT_PIN;
+    const rescue = args.has('--rescue');
+    const port = rescue ? RESCUE_PORT : PORT;
 
-    if (!host || !source) throw friendly('Usage:  npm run install-app -- <tv-ip> <url-or-path> [--pin 123456] [--name "My App"]');
+    if (!host || !source) throw friendly('Usage:  npm run install-app -- <tv-ip> <url-or-path> [--pin 123456] [--name "My App"] [--rescue]');
 
     const name = args.value('--name') || basename(isUrl(source) ? new URL(source).pathname : source);
 
-    ui.heading('install-app', host);
+    ui.heading('install-app', rescue ? `${host} (rescue :${RESCUE_PORT})` : host);
 
     const started = Date.now();
     const archive = await load(source);
-    const buildBefore = await buildOf(host);
+    const buildBefore = rescue ? null : await buildOf(host);
 
-    const response = await fetch(`http://${host}:${PORT}/install`, {
+    const response = await fetch(`http://${host}:${port}/install`, {
         method: 'POST',
         headers: {
             'content-type': 'application/octet-stream',
@@ -81,6 +86,11 @@ const main = async () => {
     }).catch((e) => e);
 
     if (response instanceof Error) {
+        if (rescue) {
+            throw friendly(`The rescue did not answer on ${host}:${RESCUE_PORT}: ${response.message}\n` +
+                `  Is Tizen Tap Rescue installed and running? curl http://${host}:${RESCUE_PORT}/health`);
+        }
+
         if (!buildBefore) throw friendly(`Tizen Tap did not answer on ${host}:${PORT}: ${response.message}`);
 
         const after = await afterDrop(host, buildBefore, response.message);
@@ -110,7 +120,10 @@ const main = async () => {
 
     ui.ok(name, `${ui.bytes(archive.length)} · ${result.packageId || ''} v${result.version || '?'}`, Date.now() - started);
 
-    if (result.appId) {
+    // The rescue launches what it installed itself.
+    if (rescue) {
+        ((result.phases || []).filter((line) => /^launched /.test(line))).forEach((line) => ui.ok('launch', line.slice(9)));
+    } else if (result.appId) {
         const launched = await fetch(`http://${host}:8001/api/v2/applications/${result.appId}`, { method: 'POST' })
             .catch(() => null);
         if (launched && launched.ok) ui.ok('launch', result.appId);

@@ -21,7 +21,8 @@ const DEFAULTS = {
     certDuids: null,         // every DUID they name — `--duidList` is a list
     certCreatedAt: null,
     catalogUrl: null,        // overrides the built-in origin when set
-    lastInstalled: []
+    lastInstalled: [],
+    developerBuild: null     // whether the running build pins 000000; the rescue reads it to pick its PIN
 };
 
 function read() {

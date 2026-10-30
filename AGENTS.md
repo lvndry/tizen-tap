@@ -240,5 +240,9 @@ itself: its own staged package, promoted after 2 minutes of healthy uptime.
 - **What did it do?** `rescue.log` in the same directory; `GET /dev/status`
   serves its last lines under `rescue`, plus the last-good build, size and
   date, and an `Also:` line if the rescue or the copy is missing.
+- **Tizen Tap broken for good?** The rescue serves `GET :8093/health` (no
+  PIN) and `POST :8093/install` (Tizen Tap's PIN, same lockout rules), and
+  nothing else. `npm run install-app -- <tv-ip> <wgt> --pin <pin> --rescue`
+  installs through it; `/dev/status` reports `rescue.listening`.
 - See [docs/troubleshooting.md](docs/troubleshooting.md), "Tizen Tap is gone
   after an update".

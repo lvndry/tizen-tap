@@ -174,11 +174,30 @@ function createRescue({ probe, lanHost, appInstalled, launch, reinstall, lastGoo
 
 const UNINSTALLED = (output) => output.indexOf('spend time') !== -1 || /uninstall failed/i.test(output);
 
+// In place first. A refusal that is the installer's verdict (not sdbd
+// dropping the connection) gets one uninstall and a fresh install, which is
+// what clears a half-registered package.
+async function installStaged(session, path, packageId, say) {
+    say(`shell:0 vd_appinstall ${packageId} ${path} (in place)`);
+
+    try {
+        return await installer.run(session, path, packageId);
+    } catch (error) {
+        if (error.isSdbError) throw error;
+        say(`in place refused (${error.code}: ${error.message}); uninstalling first`);
+    }
+
+    const uninstall = `shell:0 vd_appuninstall ${packageId}`;
+    say(uninstall);
+    await session.exec(uninstall, { timeout: 120000, until: UNINSTALLED });
+
+    say(`shell:0 vd_appinstall ${packageId} ${path}`);
+    return installer.run(session, path, packageId);
+}
+
 // The last-good copy goes to the one staging path vd_appinstall accepts, then
-// installs in place over loopback sdb. A refusal that is the installer's
-// verdict (not sdbd dropping the connection) gets one uninstall and a fresh
-// install, which is what clears a half-registered package. Tizen Tap's
-// configuration lives in /home/owner/share and survives the uninstall.
+// installs over loopback sdb. Tizen Tap's configuration lives in
+// /home/owner/share and survives an uninstall.
 function createReinstall({ readArchive, stage = installer.stage, sdb, log }) {
     const say = (message) => {
         try { log(message); } catch (e) {}
@@ -196,24 +215,7 @@ function createReinstall({ readArchive, stage = installer.stage, sdb, log }) {
         say(`staged ${archive.length} bytes to ${path}`);
 
         try {
-            await sdb.withSession({ log: say }, async (session) => {
-                say(`shell:0 vd_appinstall ${SELF_PACKAGE_ID} ${path} (in place)`);
-
-                try {
-                    await installer.run(session, path, SELF_PACKAGE_ID);
-                    return;
-                } catch (error) {
-                    if (error.isSdbError) throw error;
-                    say(`in place refused (${error.code}: ${error.message}); uninstalling first`);
-                }
-
-                const uninstall = `shell:0 vd_appuninstall ${SELF_PACKAGE_ID}`;
-                say(uninstall);
-                await session.exec(uninstall, { timeout: 120000, until: UNINSTALLED });
-
-                say(`shell:0 vd_appinstall ${SELF_PACKAGE_ID} ${path}`);
-                await installer.run(session, path, SELF_PACKAGE_ID);
-            });
+            await sdb.withSession({ log: say }, (session) => installStaged(session, path, SELF_PACKAGE_ID, say));
         } finally {
             // sdbd serves one session; Tizen Tap's own start needs it to arm root.
             sdb.release();
@@ -221,4 +223,4 @@ function createReinstall({ readArchive, stage = installer.stage, sdb, log }) {
     };
 }
 
-module.exports = { createRescue, createReinstall, MAX_FAILED_REINSTALLS, TIMINGS };
+module.exports = { createRescue, createReinstall, installStaged, MAX_FAILED_REINSTALLS, TIMINGS };

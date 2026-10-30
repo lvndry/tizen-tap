@@ -180,6 +180,9 @@ function start() {
             'unpair every phone');
     }
 
+    // The rescue on :8093 asks for the same PIN this build answers to.
+    if (device.onTv && config.read().developerBuild !== DEVELOPER) config.update({ developerBuild: DEVELOPER });
+
     const adopted = config.adoptHandoff();
 
     if (adopted) {
