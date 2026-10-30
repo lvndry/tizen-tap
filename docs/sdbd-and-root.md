@@ -77,6 +77,23 @@ documented in theubusu/samsung-tv-root issue #15 (S90F, Tizen 9). It may
 self-expire; the TTL is unknown. The reported next-step cure is a Smart
 Hub reset. Practical rule: batch root work into few arm cycles.
 
+## One session at a time
+
+sdbd serves one client session at a time. The root agent runs inside the
+session its injection opened, so while it is connected every other client
+(an install, a status probe) is closed mid-handshake or reset. Killing the
+agent frees sdbd for the very next client. Two consequences in the service:
+
+- `POST /install` keeps sdb as its route, and when sdb turns it away with a
+  connected root channel it installs the staged package as root with
+  `/usr/bin/pkgcmd -i -t wgt -p <staged path>`. A self-update is the
+  exception: it would kill the service, close the channel and take the agent
+  (and pkgcmd) down mid-install, so the agent is released first and the
+  update goes over sdb.
+- `GET /dev/status` treats the connection the service already holds, or a
+  connected root channel, as proof the handshake works, and only reports a
+  rejection that repeats over several attempts.
+
 ## The sdb `shell:` verb is not a shell
 
 It is a regex allowlist of canned verbs (`getduid`, `getdate`,
