@@ -185,5 +185,5 @@ Treat these as load-bearing, not guesses:
   homebrew to fix a dead server; that's a sledgehammer that also drops the
   connection mid-swap.
 - **It has been wiped by TV self-updates.** If `GET /packages` no longer lists
-  `S6K2WQ8MnP`, reinstall from `stremio/release/stremio-server.wgt`. The
+  `S6K2WQ8MnP`, reinstall from `release/stremio-server.wgt`. The
   client app surviving does not mean the server did.
