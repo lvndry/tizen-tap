@@ -270,3 +270,91 @@ Three ways out, easiest first:
    back to `127.0.0.1` and another restart). A Smart Hub reset also breaks
    the loop, but it removes every sideloaded app, so you end up here
    anyway.
+
+## The apps die while watching, and the setup screen keeps reappearing
+
+Observed on the TU55CU7105 (Tizen 9, firmware `T-KSU2ECDEUC-0090-2230.0`)
+on 2026-10-31.
+
+### What is actually happening
+
+Under a full stream the box runs at a sustained load average of about 32 on
+four cores (the native Stremio app alone holds ~50% of a core, and Samsung's
+own `bgrecompd` display recomposer holds a lot more). At that load Tizen's
+`stability-monitor` starts killing applications in the `owner` namespace that
+stop answering — sideloaded services included. The Stremio server and Tizen
+Tap died together this way, with no OOM anywhere in `dmesg`. Every time the
+server died, the Stremio app on the TV redrew its "connect to server" screen,
+which reads as the setup wizard coming back.
+
+Two traps while chasing this:
+
+- **Standby is not a reboot.** On this firmware a power on/off is a deep
+  sleep: `/proc/uptime` keeps counting across days. Only an actual power cut
+  runs the boot path. A fix that depends on "boot" logic must be verified
+  against `/proc/uptime`, not against a standby cycle.
+- **The Control API's `developerIP` is a stale cache**, not the settings DB.
+  The ground truth is `buxton2ctl get system db/sdk/develop/ip` through the
+  root channel. And `running` in an `/applications/<id>` answer is not
+  trustworthy mid-relaunch either — a port probe is the faster liveness
+  check on the same box.
+
+### The fix: a root watchdog that Tizen cannot kill
+
+The fix is a shell loop running as a **root systemd service** in the system
+namespace, where `stability-monitor` does not reach. Every 20 s it checks the
+Tizen Tap service (`:8091`) and the Stremio server (`:11470`); an app counts
+as down only when its port is closed *and* the Control API agrees it is not
+running, and it relaunches through the Control API with a per-app 90 s
+cooldown, so a slow start (~10 s to open its port) is not relaunched on every
+pass — that spam is what made the setup screen flicker in the first place. It
+also prunes the Stremio stream cache past 800 MB, guarded by a file-count
+stability check so it never deletes a segment still landing; the cache had
+reached 1.25 GB before the first prune, which is also what the "storage
+almost full" warning was about.
+
+### The three Tizen traps the install falls into
+
+- **`/etc/systemd/system`, `/usr/lib/systemd/system` and `/etc/init.d` are
+  read-only** (VDFS rootfs, `remount,rw` fails), and there is no `rc.local`.
+  The only unit directory that is both writable *and* scanned is
+  `/run/systemd/system`, which is tmpfs — wiped every boot. The service
+  therefore recreates the unit after every successful root arm; the first arm
+  of a boot is the rebuild moment (`service/src/root/watchdog.ts`).
+- **UEP refuses to exec an unsigned file**, even one invoked through
+  `/bin/sh`. The unit dot-sources the script instead:
+  `ExecStart=/bin/sh -c ". /opt/etc/watchdog/tv-watchdog.sh"`.
+- **There is no `timeout` binary.** Port probes are bare `/dev/tcp` connects
+  (instant both ways on the same box) and `curl -m` bounds the rest.
+
+Everything durable lives under `/opt` (the 3.9 GB eMMC partition that holds
+all app data; `/home/owner` is a symlink into it). The rootfs beside it is a
+1.3 GB VDFS image that is 100% full on this set — nothing writable can go
+there. The script, the Control API token, the unit copy and the cooldown
+state all sit under `/opt/etc/watchdog/`; the log is `/opt/var/tv-watchdog.log`.
+
+### Reading it
+
+```sh
+curl -X POST -H "x-homebrew-pin: 000000" --data 'systemctl is-active tv-watchdog; tail -n 10 /opt/var/tv-watchdog.log' http://<tv-ip>:8091/dev/root/exec
+```
+
+A line like `relaunch S6K2WQ8MnP.StremioServer` is one rescue; `cache pruned
+1250MB -> 1MB` is one prune. An app that the watchdog keeps having to
+relaunch is a load problem, not a watchdog problem — the monitor is only
+killing things that are too slow, usually because the box is too busy.
+
+## A factory reset before, and what it takes
+
+A factory reset on this set wipes everything the homebrew stack depends on:
+all sideloaded packages, Developer Mode, the sdbd developer-host value, and
+app-local data such as the Stremio addon list (the addons live in the app's
+local storage, not on the Stremio server — reinstalling the server does not
+restore them). It also changes the Samsung PIN (ours went to `1010`).
+
+What it does fix, that nothing else did: the sdbd lockout, where
+`127.0.0.1:26101` resets every client that is not the developer host IP. The
+value sdbd acts on is read from the settings DB at its own startup, so the
+cure is either a Developer Mode write (which restarts it) or a factory
+reset. Hours of quiet do not clear it.
+
