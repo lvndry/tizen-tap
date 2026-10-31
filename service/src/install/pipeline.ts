@@ -66,8 +66,12 @@ const HELD_BY_ANOTHER_SESSION = { sdbClosed: true, sdbReset: true };
 // connected). The probe only asked for the duid, so nothing was installed and root is still safe.
 const PROBE_HELD_BY_ANOTHER_SESSION = { ...HELD_BY_ANOTHER_SESSION, sdbTimeout: true };
 
-// sdbd takes a moment to notice its session's process is gone.
-const SDBD_SETTLE_MS = 2000;
+// sdbd takes a few seconds to notice its session's process is gone: the release kills the agent
+// a second after it answers, and on a CU7105 a dial two seconds later was still reset while one
+// eight seconds later went through. So the install waits until sdbd completes a handshake.
+const SDBD_SETTLE_MS = 1500;
+const SDBD_FREE_ATTEMPTS = 15;
+const SDBD_FREE_GAP_MS = 1000;
 
 function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -294,6 +298,13 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
             say.warn(`releasing the root agent so sdb can carry the install (${refusal.code})`);
             await rootChannel.release();
             await wait(SDBD_SETTLE_MS);
+
+            if (sdb.probeHandshake) {
+                const freed = await sdb.probeHandshake({ attempts: SDBD_FREE_ATTEMPTS, gap: SDBD_FREE_GAP_MS });
+                sdbSays.info(freed.handshake === 'ok'
+                    ? `sdbd took a client again after the release (attempt ${freed.attempts})`
+                    : `sdbd still turned clients away after the release (${freed.error})`);
+            }
 
             try {
                 await installOverSdb(carried, isSelf);

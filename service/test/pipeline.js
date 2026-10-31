@@ -493,6 +493,17 @@ const run = async () => {
     }
 
     {
+        // sdbd keeps turning clients away for a few seconds after the agent dies.
+        const order = [];
+        const sdb = heldSdb(0);
+        sdb.probeHandshake = async (options) => { order.push(`probe x${options.attempts}`); return { handshake: 'ok', attempts: 4, error: null }; };
+        const wrapped = { ...sdb, withSession: (options, run) => { order.push('session'); return sdb.withSession(options, run); } };
+        const { outcome } = await releasedInstall({ sdbError: 'sdbClosed', sdb: wrapped });
+        check('after the release the install waits for sdbd to take a client before installing',
+            outcome.route === 'sdb' && order[0] === 'probe x15' && order.indexOf('session') > 0, order.join(','));
+    }
+
+    {
         const channel = fakeChannel({ busy: true });
         setTimeout(() => { channel.busy = false; }, 300);
         const { outcome } = await releasedInstall({ sdb: heldSdb(1), channel, rootIdleWaitMs: 5000 });
