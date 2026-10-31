@@ -38,6 +38,7 @@ const LAST_GOOD_META = `${RESCUE_DIR}/last-good.json`;
 const RESCUE_LOG = `${RESCUE_DIR}/rescue.log`;
 const RESCUE_STATE = `${RESCUE_DIR}/state.json`;
 const RESCUE_PIN = `${RESCUE_DIR}/pin.json`;
+const EXPECT_RESTART = `${RESCUE_DIR}/expect-restart.json`;
 
 // Tizen Tap's own configuration: its pairing PIN, its developer mark and the
 // TV's signing pair. The rescue only ever reads it.
@@ -227,6 +228,31 @@ function createKeeper({ fs, build, probe, log, schedule = setTimeout, now = () =
     return { capture, promote, start };
 }
 
+// A self-update cannot bring Tizen Tap back by itself. The platform kills the
+// running service partway through vd_appinstall, before the throw that trips
+// auto-restart, and a killed service stays down (seen on every self-update of
+// a CU7105). So before installing over itself it leaves this note and opens
+// the rescue, which follows the restart through (rescue/src/rescue.ts). The
+// note expires on its own, so an install that never happens costs nothing.
+const EXPECT_RESTART_MS = 5 * 60 * 1000;
+
+function expectRestart(fs, reason, now = Date.now()) {
+    fs.mkdirSync(RESCUE_DIR, { recursive: true });
+    writeAtomically(fs, EXPECT_RESTART, JSON.stringify({ reason, until: new Date(now + EXPECT_RESTART_MS).toISOString() }));
+}
+
+// Read once: the note is removed as it is taken, so one restart is followed once.
+function takeExpectedRestart(fs, now = Date.now()) {
+    const expected = readJson(fs, EXPECT_RESTART);
+    try { fs.unlinkSync(EXPECT_RESTART); } catch (e) {}
+
+    return expected && Date.parse(expected.until) > now ? expected : null;
+}
+
+function cancelExpectedRestart(fs) {
+    try { fs.unlinkSync(EXPECT_RESTART); } catch (e) {}
+}
+
 const LOG_TAIL_LINES = 10;
 
 // What /dev/status says about the rescue. `installed` is null off a TV, where
@@ -270,5 +296,5 @@ function describeRescue({ fs, installed }) {
 module.exports = {
     SELF_PACKAGE_ID, TIZEN_TAP_APP_ID, TIZEN_TAP_PORT, RESCUE_PACKAGE_ID, RESCUE_APP_ID, RESCUE_PORT,
     STAGED_PACKAGE, RESCUE_DIR, CANDIDATE, LAST_GOOD, LAST_GOOD_META, RESCUE_LOG, RESCUE_STATE, RESCUE_PIN, TIZEN_TAP_CONFIG,
-    HEALTHY_UPTIME_MS, carriesBuild, keepCandidate, writeAtomically, readJson, lanIpv4, probeVersion, createKeeper, describeRescue
+    EXPECT_RESTART, HEALTHY_UPTIME_MS, carriesBuild, expectRestart, takeExpectedRestart, cancelExpectedRestart, keepCandidate, writeAtomically, readJson, lanIpv4, probeVersion, createKeeper, describeRescue
 };

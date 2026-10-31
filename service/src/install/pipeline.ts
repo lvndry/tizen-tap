@@ -66,8 +66,12 @@ const HELD_BY_ANOTHER_SESSION = { sdbClosed: true, sdbReset: true };
 // connected). The probe only asked for the duid, so nothing was installed and root is still safe.
 const PROBE_HELD_BY_ANOTHER_SESSION = { ...HELD_BY_ANOTHER_SESSION, sdbTimeout: true };
 
-// sdbd takes a moment to notice its session's process is gone.
-const SDBD_SETTLE_MS = 2000;
+// sdbd takes a few seconds to notice its session's process is gone: the release kills the agent
+// a second after it answers, and on a CU7105 a dial two seconds later was still reset while one
+// eight seconds later went through. So the install waits until sdbd completes a handshake.
+const SDBD_SETTLE_MS = 1500;
+const SDBD_FREE_ATTEMPTS = 15;
+const SDBD_FREE_GAP_MS = 1000;
 
 function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -80,7 +84,7 @@ async function waitUntil(done: () => boolean, timeoutMs: number) {
 }
 
 function createInstaller({ sdb, device, config, resigner, store, log, rootChannel = null as any, rearmRoot = null as any,
-    keepCandidate = null as any, queueWaitMs = QUEUE_WAIT_MS, rootIdleWaitMs = ROOT_IDLE_WAIT_MS }) {
+    keepCandidate = null as any, selfRestart = null as any, queueWaitMs = QUEUE_WAIT_MS, rootIdleWaitMs = ROOT_IDLE_WAIT_MS }) {
     const say = log ? log.on('pkg') : QUIET;
     const sdbSays = log ? log.on('sdb') : QUIET;
 
@@ -261,15 +265,16 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
 
         // A self-update installs in place: sdbd overwrites the files, and the caller then exits
         // abnormally so auto-restart loads the new build. Uninstalling first removes the very
-        // process doing the installing, so it is only the fallback for an install sdbd ran and
-        // refused. sdbd turning the connection away is never that: it once got through on the
-        // uninstall's retry and left the TV with no Tizen Tap at all.
+        // process doing the installing, so it is only the fallback for the installer's own
+        // refusal. An sdb error (a reset, a closed handshake, a timeout) is never that: one got
+        // through on the uninstall's retry and left the TV with no Tizen Tap at all, and a
+        // timeout says nothing about whether the install ran.
         const installOverSdb = async (carried, isSelf) => {
             if (isSelf) {
                 try {
                     return await inPlaceOverSdb(carried);
                 } catch (error) {
-                    if (HELD_BY_ANOTHER_SESSION[error.code] || rootHoldsSdbd(error.code)) throw error;
+                    if (error.isSdbError) throw error;
                     sdbSays.info(`in place refused (${error.code || 'install failed'}), uninstalling the old copy first`);
                 }
             }
@@ -295,6 +300,13 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
             await rootChannel.release();
             await wait(SDBD_SETTLE_MS);
 
+            if (sdb.probeHandshake) {
+                const freed = await sdb.probeHandshake({ attempts: SDBD_FREE_ATTEMPTS, gap: SDBD_FREE_GAP_MS });
+                sdbSays.info(freed.handshake === 'ok'
+                    ? `sdbd took a client again after the release (attempt ${freed.attempts})`
+                    : `sdbd still turned clients away after the release (${freed.error})`);
+            }
+
             try {
                 await installOverSdb(carried, isSelf);
             } catch (error) {
@@ -318,11 +330,25 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
             return { ...carried, route: 'sdb' };
         };
 
+        // The platform kills this process partway through installing over it, so something outside
+        // has to start the new build: the rescue is told first, and told again if nothing happened.
         const runInstaller = async (carried) => {
             const isSelf = carried.identity.packageId === SELF_PACKAGE_ID;
 
             phase('installing', carried.identity.name || carried.identity.packageId);
 
+            if (!isSelf || !selfRestart) return installByRoute(carried, isSelf);
+
+            selfRestart.expect();
+            try {
+                return await installByRoute(carried, isSelf);
+            } catch (error) {
+                selfRestart.cancel();
+                throw error;
+            }
+        };
+
+        const installByRoute = async (carried, isSelf) => {
             // The probe already saw sdb held, so it is not tried again before the release: a second
             // attempt would hang the same way.
             const { state } = carried;

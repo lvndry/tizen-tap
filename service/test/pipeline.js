@@ -347,7 +347,7 @@ const run = async () => {
             withSession: (_options, run) => {
                 calls.count += 1;
                 if (calls.count <= succeedAfter) {
-                    return Promise.reject(Object.assign(new Error('127.0.0.1:26101 closed the connection before the ADB handshake completed.'), { code: 'sdbClosed' }));
+                    return Promise.reject(Object.assign(new Error('127.0.0.1:26101 closed the connection before the ADB handshake completed.'), { code: 'sdbClosed', isSdbError: true }));
                 }
                 return run({
                     exec: (command) => {
@@ -452,6 +452,32 @@ const run = async () => {
     }
 
     {
+        const told = [];
+        const selfRestart = { expect: () => told.push('expect'), cancel: () => told.push('cancel') };
+        const store = createStore({ installing: false, catalog: [] });
+        const { install } = createInstaller({
+            sdb: fakeSdb(), device: fakeDevice(), config: fakeConfig({ author: 'present' }),
+            resigner: fakeResigner, store, selfRestart
+        });
+
+        await install({ source: 'upload', upload: fixture.wgtWithIcon() });
+        check('a self-update tells the rescue before installing, since nothing else starts the new build',
+            told.join(',') === 'expect', told.join(','));
+
+        told.length = 0;
+        await install({ source: 'upload', upload: otherUploadFor('ACME000001') });
+        check('another package does not', told.length === 0, told.join(','));
+
+        told.length = 0;
+        const failing = createInstaller({
+            sdb: fakeSdb('install failed[118, -12]'), device: fakeDevice(), config: fakeConfig({ author: 'present' }),
+            resigner: fakeResigner, store, selfRestart
+        });
+        await failing.install({ source: 'upload', upload: fixture.wgtWithIcon() }).catch(() => {});
+        check('a self-update that fails withdraws the request', told.join(',') === 'expect,cancel', told.join(','));
+    }
+
+    {
         const { outcome, sdb } = await releasedInstall({ sdb: heldSdb(), upload: fixture.wgtWithIcon() });
         check('a self-update that sdb keeps turning away after the release never uninstalls the running copy',
             outcome.code === 'sdbUnreachable' && !sdb.calls.commands.some((c) => c.includes('vd_appuninstall')),
@@ -464,6 +490,35 @@ const run = async () => {
             outcome.code === 'installBusy' && /Retry once the root channel is idle/.test(outcome.message) &&
             channel.seen.released === 0 && channel.seen.commands.length === 0,
             `${outcome.code}: ${outcome.message}`);
+    }
+
+    {
+        const commands = [];
+        const timingOut = { withSession: (_options, run) => run({
+            exec: (command) => {
+                commands.push(command);
+                return Promise.reject(Object.assign(new Error('Command timed out after 180000ms'), { code: 'sdbTimeout', isSdbError: true }));
+            },
+            close: () => {}
+        }) };
+        const store = createStore({ installing: false, catalog: [] });
+        const { install } = createInstaller({
+            sdb: timingOut, device: fakeDevice(), config: fakeConfig({ author: 'present' }), resigner: fakeResigner, store
+        });
+        const outcome = await install({ source: 'upload', upload: fixture.wgtWithIcon() }).catch((e) => e);
+        check('a self-update whose install times out never uninstalls the running copy',
+            outcome.code === 'sdbTimeout' && !commands.some((c) => c.includes('vd_appuninstall')), JSON.stringify(commands));
+    }
+
+    {
+        // sdbd keeps turning clients away for a few seconds after the agent dies.
+        const order = [];
+        const sdb = heldSdb(0);
+        sdb.probeHandshake = async (options) => { order.push(`probe x${options.attempts}`); return { handshake: 'ok', attempts: 4, error: null }; };
+        const wrapped = { ...sdb, withSession: (options, run) => { order.push('session'); return sdb.withSession(options, run); } };
+        const { outcome } = await releasedInstall({ sdbError: 'sdbClosed', sdb: wrapped });
+        check('after the release the install waits for sdbd to take a client before installing',
+            outcome.route === 'sdb' && order[0] === 'probe x15' && order.indexOf('session') > 0, order.join(','));
     }
 
     {

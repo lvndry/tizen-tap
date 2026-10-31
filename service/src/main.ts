@@ -56,7 +56,7 @@ const { RootChannel } = require('./root/channel.ts');
 const rootArm = require('./root/arm.ts');
 const { makePortProbe, createWatchdog, stremioLanHost } = require('./revive.ts');
 const { noteLaunch } = require('./launches.ts');
-const { createKeeper, keepCandidate, probeVersion, lanIpv4 } = require('./rescue/lastgood.ts');
+const { createKeeper, keepCandidate, probeVersion, lanIpv4, expectRestart, cancelExpectedRestart, RESCUE_APP_ID } = require('./rescue/lastgood.ts');
 
 // 8080 is taken by a Samsung system service, so binding there fails with EADDRINUSE.
 const PORT = Number(process.env.HOMEBREW_PORT) || 8091;
@@ -284,13 +284,32 @@ function start() {
     });
 
     const armer = rootArm.createArmer({
-        sdb, channel, log: (line) => svc.info(line), onOutcome: (error) => status.noteArmError(error)
+        sdb, channel, log: (line) => svc.info(line), onOutcome: (error) => status.noteArmError(error),
+        installing: () => !!store.select('installing')
     });
+
+    // See expectRestart in rescue/lastgood.ts. Without the rescue installed the launch is refused
+    // and the new build waits for the app to be opened, as before.
+    const selfRestart = device.onTv ? {
+        expect() {
+            try {
+                expectRestart(require('fs'), 'self-update');
+                (globalThis as any).tizen.application.launch(RESCUE_APP_ID,
+                    () => svc.info('the rescue is following the self-update, to start the new build'),
+                    (error) => svc.warn(`the rescue was not launched (${error.code || error.message}); ` +
+                        'open Tizen Tap on the TV after the update'));
+            } catch (error) {
+                svc.warn(`could not hand the self-update to the rescue: ${error.message}`);
+            }
+        },
+        cancel: () => cancelExpectedRestart(require('fs'))
+    } : null;
 
     const installer = createInstaller({
         sdb, device, config, resigner, store, log, rootChannel: channel,
         rearmRoot: () => armer.arm('the re-arm after an install'),
-        keepCandidate: device.onTv ? (archive) => keepCandidate(require('fs'), archive, (line) => svc.info(line)) : null
+        keepCandidate: device.onTv ? (archive) => keepCandidate(require('fs'), archive, (line) => svc.info(line)) : null,
+        selfRestart
     });
 
     function announce(state, previous) {
