@@ -2,9 +2,9 @@
 
 // Builds and signs release/stremio-server.wgt.
 //
-// The package is four flat files (config.xml, icon.png, index.html, main.js
-// and the vendored desktop bundle staged as src/server.js) — there is nothing
-// desktop bundle is already the artifact. Signing uses the same certificate
+// The package is five flat files (config.xml, icon.png, index.html, main.js,
+// space.js) plus the vendored desktop bundle staged as src/server.js. There is
+// nothing to compile: the desktop bundle is already the artifact. Signing uses the same certificate
 // pair as the homebrew package, which already covers this television.
 
 const { execFileSync } = require('child_process');
@@ -15,7 +15,7 @@ const ROOT = join(__dirname, '..');
 const STAGE = join(ROOT, '.package-stremio');
 const OUT = join(ROOT, 'release', 'stremio-server.wgt');
 
-const INCLUDE = ['config.xml', 'icon.png', 'index.html', 'main.js'];
+const INCLUDE = ['config.xml', 'icon.png', 'index.html', 'main.js', 'space.js'];
 
 const certificates = require(join(ROOT, 'tools', 'certificates.js'));
 

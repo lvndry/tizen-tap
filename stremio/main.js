@@ -19,6 +19,8 @@
 //     Stremio client on the LAN expects, instead of first-free-from-11470
 //   - every boot stage appends a line to boot.log in the data path, so a
 //     silent crash is diagnosable afterwards
+//   - the torrent cache is trimmed to its cap at start and kept from filling
+//     the partition while running (see space.js)
 //
 // Everything else — the HTTP API, the addon proxy, the WebTorrent engine — is
 // the unmodified desktop bundle.
@@ -120,9 +122,11 @@ if (!fs.existsSync(settingsFile)) {
     note('settings written');
 }
 
+let cacheSize = CACHE_DEFAULT;
+
 try {
     const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-    const cacheSize = settings.cacheSize === null || settings.cacheSize > CACHE_CEILING ? CACHE_DEFAULT : settings.cacheSize;
+    cacheSize = settings.cacheSize === null || settings.cacheSize > CACHE_CEILING ? CACHE_DEFAULT : settings.cacheSize;
 
     if (settings.cacheRoot !== dataPath || settings.appPath !== dataPath || cacheSize !== settings.cacheSize) {
         fs.writeFileSync(settingsFile, JSON.stringify({ ...settings, appPath: dataPath, cacheRoot: dataPath, cacheSize }, null, 4));
@@ -131,6 +135,23 @@ try {
 } catch (e) {
     note('could not check settings: ' + (e && e.message));
 }
+
+const space = require('./space.js');
+const cacheDir = path.join(dataPath, 'stremio-cache');
+
+try {
+    space.trimToCap({ fs, cacheDir, cap: cacheSize, log: note });
+} catch (e) {
+    note('could not trim the cache: ' + (e && e.message));
+}
+
+setInterval(() => {
+    try {
+        space.keepFree({ fs, cacheDir, freeBytes: () => { const stat = fs.statfsSync(dataPath); return stat.bavail * stat.bsize; }, log: note });
+    } catch (e) {
+        note('could not check free space: ' + (e && e.message));
+    }
+}, space.SWEEP_MS).unref();
 
 // The bundle listens on 11470 and retries 11471, 11472... until one is free.
 // On the television 11470 is the port clients expect, so force it back if the

@@ -7,7 +7,7 @@
     "scripts": {
         "build": "node build.js",
         "start": "node src/main.ts",
-        "test": "node test/run.js && node test/adb.js && node test/sdb.js && node test/relay.js && node test/lockout.js && node test/busy.js && node test/pipeline.js && node test/preview.js && node test/resign.js && node test/signature.js && node test/verdicts.js && node test/updates.js && node test/log.js && node test/flight.js && node test/config.js && node test/runtime.js && node test/packages.js && node test/platform.js && node test/device.js && node test/fetch.js && node test/repl.js && node test/memory.js && node test/root.js && node test/armer.js && node test/developer.js && node test/processes.js && node test/rescue.js && node test/rescue-server.js",
+        "test": "node test/run.js && node test/adb.js && node test/sdb.js && node test/relay.js && node test/lockout.js && node test/busy.js && node test/pipeline.js && node test/preview.js && node test/resign.js && node test/signature.js && node test/verdicts.js && node test/updates.js && node test/log.js && node test/flight.js && node test/config.js && node test/runtime.js && node test/packages.js && node test/platform.js && node test/device.js && node test/fetch.js && node test/repl.js && node test/memory.js && node test/root.js && node test/armer.js && node test/developer.js && node test/processes.js && node test/rescue.js && node test/rescue-server.js && node test/stremio-space.js",
         "check": "node check-syntax.js dist/index.js",
         "typecheck": "tsc --noEmit"
     },
