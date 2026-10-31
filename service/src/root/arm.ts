@@ -100,17 +100,22 @@ function arm(sdb, channel, log) {
     log = log || (() => {});
     stage(log);
 
+    // A timeout is the usual reply, the agent having dialed in while sdbd held the verb open. Any
+    // other failure means sdbd turned the connection away, so the injection never ran.
+    let refused: Error | null = null;
     log('root-arm: injecting');
     sdb.withSession({ host: '127.0.0.1' }, (session) =>
         session.exec(injectionFor(manifest()), { timeout: 15000 })
     ).catch((error) => {
         log(`root-arm: sdb reply ${error.code || error.message}`);
+        if (error.code !== 'sdbTimeout') refused = error;
     });
 
     return new Promise<any>((resolve, reject) => {
         const deadline = Date.now() + ARM_DEADLINE_MS;
         function tick() {
             if (channel.connected) return resolve(channel.identity);
+            if (refused) return reject(refused);
             if (Date.now() > deadline) return reject(new Error('root-arm: the agent never dialed back in'));
             setTimeout(tick, 500);
         }
