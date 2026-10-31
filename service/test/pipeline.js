@@ -14,6 +14,11 @@ const check = (name, ok, detail) => {
 
 const realPackage = fixture.wgt();
 
+const otherUploadFor = (packageId) => fixture.zipAll([
+    { name: 'config.xml', contents: Buffer.from(readFileSync(join(__dirname, '..', '..', 'config.xml')).toString('utf8').replace(/GJBBYNLkgP/g, packageId)), deflate: true },
+    { name: 'icon.png', contents: fixture.PIXEL }
+]);
+
 {
     const entry = require('../src/main.ts');
     check('the service exports onStart, which Tizen calls',
@@ -130,13 +135,7 @@ const run = async () => {
 
         // Identity comes from the manifest inside the archive, so the other
         // package is a real variant of the repo's config with a different id.
-        const otherConfig = Buffer.from(readFileSync(join(__dirname, '..', '..', 'config.xml')).toString('utf8').replace(/GJBBYNLkgP/g, 'ACME000001'));
-        const otherUpload = fixture.zipAll([
-            { name: 'config.xml', contents: otherConfig, deflate: true },
-            { name: 'icon.png', contents: fixture.PIXEL }
-        ]);
-
-        const outcome = await install({ source: 'upload', reference: 'other.wgt', upload: otherUpload });
+        const outcome = await install({ source: 'upload', reference: 'other.wgt', upload: otherUploadFor('ACME000001') });
 
         const uninstallIndex = commands.findIndex((c) => c.includes('vd_appuninstall ACME000001'));
         const installIndex = commands.findIndex((c) => c.includes('vd_appinstall ACME000001'));
@@ -174,17 +173,60 @@ const run = async () => {
     }
 
     {
-        const store = createStore({ installing: true, catalog: [] });
+        const store = createStore({ installing: { name: 'Stuck', startedAt: Date.now() }, catalog: [] });
+        const { install } = createInstaller({
+            sdb: fakeSdb(), device: fakeDevice(), config: fakeConfig(),
+            resigner: () => {}, store, queueWaitMs: 300
+        });
+
+        const refused = await install({ source: 'upload', upload: realPackage }).catch((e) => e);
+        check('a second install that waits longer than the line allows is refused as busy',
+            refused.code === 'installBusy', String(refused.code));
+        check('and told when to come back', refused.retryAfterSeconds >= 10 && refused.retryAfterSeconds <= 30,
+            String(refused.retryAfterSeconds));
+        check('the first install still holds the guard', store.select('installing').name === 'Stuck',
+            JSON.stringify(store.select('installing')));
+    }
+
+    {
+        const store = createStore({ installing: { name: 'Tizen Tap', self: true, startedAt: Date.now() }, catalog: [] });
         const { install } = createInstaller({
             sdb: fakeSdb(), device: fakeDevice(), config: fakeConfig(),
             resigner: () => {}, store
         });
 
+        const began = Date.now();
         const refused = await install({ source: 'upload', upload: realPackage }).catch((e) => e);
-        check('a second concurrent install is refused as busy', refused.code === 'installBusy', String(refused.code));
-        check('and told when to come back', refused.retryAfterSeconds >= 10 && refused.retryAfterSeconds <= 30,
-            String(refused.retryAfterSeconds));
-        check('the first install still holds the guard', store.select('installing') === true, String(store.select('installing')));
+        check('an install behind a self-update is refused at once, since the restart would drop it',
+            refused.code === 'installBusy' && Date.now() - began < 1000, `${refused.code} after ${Date.now() - began}ms`);
+    }
+
+    {
+        // Two agents installing at once: the second waits its turn, and both land, in order.
+        const order = [];
+        const slowSdb = {
+            withSession: (_options, run) => run({
+                exec: (command) => new Promise((resolve) => setTimeout(() => {
+                    if (command.includes('vd_appinstall')) order.push(command.split(' ')[2]);
+                    resolve('coreinstall spend time = 1234 ms');
+                }, 200)),
+                close: () => {}
+            })
+        };
+        const store = createStore({ installing: false, catalog: [] });
+        const { install } = createInstaller({
+            sdb: slowSdb, device: fakeDevice(), config: fakeConfig({ author: 'present' }),
+            resigner: fakeResigner, store
+        });
+
+        const [first, second] = await Promise.all([
+            install({ source: 'upload', reference: 'first', upload: otherUploadFor('ACME000001') }).catch((e) => e),
+            install({ source: 'upload', reference: 'second', upload: otherUploadFor('ACME000002') }).catch((e) => e)
+        ]);
+        check('two concurrent installs both succeed', first.packageId === 'ACME000001' && second.packageId === 'ACME000002',
+            JSON.stringify({ first: first.code || first.packageId, second: second.code || second.packageId }));
+        check('one after the other, first come first served', order.join(',') === 'ACME000001,ACME000002', order.join(','));
+        check('and the guard is free afterwards', store.select('installing') === false, JSON.stringify(store.select('installing')));
     }
 
     {
@@ -336,11 +378,7 @@ const run = async () => {
 
     const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-    const otherConfig = Buffer.from(readFileSync(join(__dirname, '..', '..', 'config.xml')).toString('utf8').replace(/GJBBYNLkgP/g, 'ACME000001'));
-    const otherUpload = () => fixture.zipAll([
-        { name: 'config.xml', contents: otherConfig, deflate: true },
-        { name: 'icon.png', contents: fixture.PIXEL }
-    ]);
+    const otherUpload = () => otherUploadFor('ACME000001');
 
     {
         const store = createStore({ installing: false, catalog: [] });
@@ -353,13 +391,13 @@ const run = async () => {
         check('an install sdb carries reports the sdb route', outcome.route === 'sdb', JSON.stringify(outcome));
     }
 
-    const releasedInstall = async ({ sdbError = null, sdb = heldSdb(0), upload = otherUpload(), channel = fakeChannel() }) => {
+    const releasedInstall = async ({ sdbError = null, sdb = heldSdb(0), upload = otherUpload(), channel = fakeChannel(), rootIdleWaitMs = 0 }) => {
         const store = createStore({ installing: false, catalog: [] });
         const rearms = counter();
         const { install } = createInstaller({
             sdb, config: fakeConfig({ author: 'present' }), resigner: fakeResigner, store,
             device: sdbError ? fakeDevice({ ready: false, reason: 'sdbUnreachable', sdbError }) : fakeDevice(),
-            rootChannel: channel, rearmRoot: rearms.rearm
+            rootChannel: channel, rearmRoot: rearms.rearm, rootIdleWaitMs
         });
         const outcome = await install({ source: 'upload', upload }).catch((e) => e);
         await settle();
@@ -415,10 +453,18 @@ const run = async () => {
 
     for (const [label, upload] of [['a self-update', fixture.wgtWithIcon()], ['another package', otherUpload()]]) {
         const { outcome, channel } = await releasedInstall({ sdb: heldSdb(), upload, channel: fakeChannel({ busy: true }) });
-        check(`${label} while a root command runs is refused as busy, root left alone`,
+        check(`${label} while a root command outlasts the wait is refused as busy, root left alone`,
             outcome.code === 'installBusy' && /Retry once the root channel is idle/.test(outcome.message) &&
             channel.seen.released === 0 && channel.seen.commands.length === 0,
             `${outcome.code}: ${outcome.message}`);
+    }
+
+    {
+        const channel = fakeChannel({ busy: true });
+        setTimeout(() => { channel.busy = false; }, 300);
+        const { outcome } = await releasedInstall({ sdb: heldSdb(1), channel, rootIdleWaitMs: 5000 });
+        check('an install waits for a short root command, then releases the agent and installs',
+            outcome.route === 'sdb' && channel.seen.released === 1, JSON.stringify({ outcome, channel: channel.seen }));
     }
 
     installer.stage = realStage;

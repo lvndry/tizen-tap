@@ -15,8 +15,17 @@ function refuse(code, message) {
     return Object.assign(new Error(message), { code });
 }
 
-// A second client is told when to come back rather than failing outright. An install that has
-// already run long is a slow one (a big download, a cold sdbd), so it is asked to wait longer.
+// Installs run one at a time, and a second client waits its turn in line, so two agents driving
+// the same TV both get their installs. It is only turned away when the line is too slow or the
+// install ahead of it is a self-update, which restarts this service and drops everyone waiting.
+// Then it is told when to come back; an install that has already run long is a slow one (a big
+// download, a cold sdbd), so it is asked to wait longer.
+const QUEUE_WAIT_MS = 3 * 60 * 1000;
+const QUEUE_POLL_MS = 250;
+
+// A root command holding the agent delays the release an install needs; most finish in seconds.
+const ROOT_IDLE_WAIT_MS = 60 * 1000;
+
 const BUSY_RETRY_MIN_S = 10;
 const BUSY_RETRY_MAX_S = 30;
 
@@ -64,21 +73,54 @@ function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createInstaller({ sdb, device, config, resigner, store, log, rootChannel = null as any, rearmRoot = null as any, keepCandidate = null as any }) {
+async function waitUntil(done: () => boolean, timeoutMs: number) {
+    const deadline = Date.now() + timeoutMs;
+    while (!done() && Date.now() < deadline) await wait(QUEUE_POLL_MS);
+    return done();
+}
+
+function createInstaller({ sdb, device, config, resigner, store, log, rootChannel = null as any, rearmRoot = null as any,
+    keepCandidate = null as any, queueWaitMs = QUEUE_WAIT_MS, rootIdleWaitMs = ROOT_IDLE_WAIT_MS }) {
     const say = log ? log.on('pkg') : QUIET;
     const sdbSays = log ? log.on('sdb') : QUIET;
+
+    const line: object[] = [];
+
+    // First in, first served. The turn is claimed by the caller in the same tick the line lets it
+    // go, so no other waiter can slip in between.
+    async function waitForTurn(request) {
+        const ticket = {};
+        line.push(ticket);
+        try {
+            const first = store.select('installing');
+            if (first) {
+                say.info(`queued behind ${first.name || 'another install'}: ${request.reference || '(upload)'}, ` +
+                    `${line.length - 1} ahead`);
+            }
+
+            const turned = await waitUntil(() => {
+                const running = store.select('installing');
+                return (!running && line[0] === ticket) || !!(running && running.self) || queueWaitMs <= 0;
+            }, queueWaitMs);
+
+            const running = store.select('installing');
+            if (running && (running.self || !turned || queueWaitMs <= 0)) {
+                const busy = refuseBusy(running);
+                say.warn(`refused: an install is already running (${busy.installing.name || 'unnamed'}, ` +
+                    `${busy.installing.phase || 'starting'})${running.self ? ', a self-update' : ''}, ` +
+                    `asked to retry in ${busy.retryAfterSeconds}s`);
+                throw busy;
+            }
+        } finally {
+            line.splice(line.indexOf(ticket), 1);
+        }
+    }
 
     const rootHoldsSdbd = (code, held = HELD_BY_ANOTHER_SESSION) =>
         !!(held[code] && rootChannel && rootChannel.status().root);
 
     async function install(request: any, report = (..._args: any[]) => {}) {
-        const running = store.select('installing');
-        if (running) {
-            const busy = refuseBusy(running);
-            say.warn(`refused: an install is already running (${busy.installing.name || 'unnamed'}, ` +
-                `${busy.installing.phase || 'starting'}), asked to retry in ${busy.retryAfterSeconds}s`);
-            throw busy;
-        }
+        await waitForTurn(request);
 
         const startedAt = Date.now();
 
@@ -147,7 +189,10 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
         // Read as it arrived: a file that is not a package should be refused before anything signs it.
         const readIdentity = (carried) => {
             const identity = manifest.identify(carried.archive);
-            track({ name: identity.name || identity.packageId || carried.name || null });
+            track({
+                name: identity.name || identity.packageId || carried.name || null,
+                self: identity.packageId === SELF_PACKAGE_ID
+            });
 
             say.info(`identified ${identity.name || 'an unnamed package'} ${identity.version || ''} ` +
                 `(${identity.packageId}${identity.appId ? `, app ${identity.appId}` : ''}, ${identity.isWgt ? 'wgt' : 'tpk'})`);
@@ -237,7 +282,8 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
         // goes over sdb, once the agent has given its session back. A self-update re-arms through
         // the new build's own start; anything else re-arms here, after the install.
         const releaseAndInstall = async (carried, refusal, isSelf) => {
-            if (rootChannel.busy) {
+            if (rootChannel.busy) say.info('waiting for the running root command before releasing the agent');
+            if (!await waitUntil(() => !rootChannel.busy, rootIdleWaitMs)) {
                 throw refuse('installBusy',
                     'sdb is turning clients away while the root agent holds its session ' +
                     `(${refusal.code}), and a root command is still running, so the agent cannot be ` +

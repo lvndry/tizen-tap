@@ -11,6 +11,7 @@ const PORT = 8091;
 // The rescue's own installer, for when Tizen Tap itself is what is broken.
 const RESCUE_PORT = 8093;
 const DEFAULT_PIN = '000000';
+const BUSY_GIVE_UP_MS = 10 * 60 * 1000;
 
 const friendly = (message) => Object.assign(new Error(message), { isFriendly: true });
 
@@ -74,7 +75,7 @@ const main = async () => {
     const archive = await load(source);
     const buildBefore = rescue ? null : await buildOf(host);
 
-    const response = await fetch(`http://${host}:${port}/install`, {
+    const post = () => fetch(`http://${host}:${port}/install`, {
         method: 'POST',
         headers: {
             'content-type': 'application/octet-stream',
@@ -84,6 +85,16 @@ const main = async () => {
         body: archive,
         signal: AbortSignal.timeout(300000)
     }).catch((e) => e);
+
+    // The service queues a second install itself; a 409 means the line was too slow or a
+    // self-update is running, and both clear by themselves.
+    let response = await post();
+    while (!(response instanceof Error) && response.status === 409 && Date.now() - started < BUSY_GIVE_UP_MS) {
+        const seconds = Number(response.headers.get('retry-after')) || 10;
+        ui.info('busy', `another install is running on the TV; retrying in ${seconds}s`);
+        await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+        response = await post();
+    }
 
     if (response instanceof Error) {
         if (rescue) {

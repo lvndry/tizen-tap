@@ -160,8 +160,13 @@ const MSG_SDBD_DOWN = 'sdbd is not running — toggle Developer Mode off/on in S
     'Developer mode, then wait ~30 s.';
 const MSG_IP_MISMATCH = 'sdbd is up but rejects the handshake. Two causes: (1) stale gate: the running sdbd ' +
     'loaded the developer IP at restart and it is not 127.0.0.1; (2) a persisted lockout from many arm cycles. ' +
-    'Toggle Developer Mode off/on to restart sdbd; if it still rejects, wait for self-expiry or do a Smart Hub reset.';
+    'Toggle Developer Mode off/on to restart sdbd; if it still rejects, only a factory reset cleared it on a CU7105.';
 const MSG_ROOT_NOT_ARMED = 'root channel is not armed — POST /dev/root/arm.';
+
+function armCapMessage(seconds) {
+    return `root channel is not armed, and this hour's arms are used up (too many lock sdbd out); ` +
+        `POST /dev/root/arm works again in ${seconds}s.`;
+}
 const MSG_STREMIO_DOWN = 'Stremio server is down — relaunch the Tizen Tap app or POST /restart.';
 const MSG_STREMIO_OOM = 'Stremio server is down and the kernel\'s OOM killer has reaped Stremio processes recently — ' +
     'the TV is out of memory; the service relaunches it, and freeing RAM (TV: Settings → Device care → RAM, or close ' +
@@ -201,7 +206,8 @@ function diagnose(state) {
         Array.isArray(state.oom && state.oom.kills) &&
         state.oom.kills.some((kill) => STREMIO_PKG_IDS.some((id) => kill.pkg.indexOf(id) !== -1));
 
-    if (rootNotArmed) rules.push(MSG_ROOT_NOT_ARMED);
+    const armCapWait = state.root.arms ? state.root.arms.nextArmInSeconds : 0;
+    if (rootNotArmed) rules.push(armCapWait ? armCapMessage(armCapWait) : MSG_ROOT_NOT_ARMED);
     if (stremioDown) rules.push(stremioOomKilled ? MSG_STREMIO_OOM : MSG_STREMIO_DOWN);
 
     // Redundant when the OOM verdict already explains the kills, otherwise the
@@ -580,7 +586,7 @@ function register(ctx, router) {
 
         try {
             json(response, await buildStatus({
-                rootStatus: () => ctx.root.channel.status(),
+                rootStatus: () => ({ ...ctx.root.channel.status(), arms: ctx.root.armer.status() }),
                 rootExec: (command) => ctx.root.channel.exec(command, ROOT_EXEC_MS)
                     .then((result) => result.stdout + (result.stderr ? `\n[stderr]\n${result.stderr}` : '')),
                 scanProc: realScanProc,

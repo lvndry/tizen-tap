@@ -241,9 +241,13 @@ function start() {
         log: (line) => svc.info(line)
     });
 
+    const armer = rootArm.createArmer({
+        sdb, channel, log: (line) => svc.info(line), onOutcome: (error) => status.noteArmError(error)
+    });
+
     const installer = createInstaller({
         sdb, device, config, resigner, store, log, rootChannel: channel,
-        rearmRoot: () => rootArm.arm(sdb, channel, (line) => svc.info(line)),
+        rearmRoot: () => armer.arm('the re-arm after an install'),
         keepCandidate: device.onTv ? (archive) => keepCandidate(require('fs'), archive, (line) => svc.info(line)) : null
     });
 
@@ -339,9 +343,8 @@ function start() {
         authorise
     };
 
-    const root = { channel, arming: false };
+    const root = { channel, armer };
     ctx.root = root;
-    ctx.rootArm = (sdbClient, channel, logFn) => rootArm.arm(sdbClient, channel, logFn);
 
     const router = createRouter({
         log,
@@ -433,19 +436,14 @@ function start() {
                     ensureLoopbackGate();
                     return;
                 }
-                root.arming = true;
-                rootArm.arm(sdb, root.channel, (line) => svc.info(line)).then(() => {
-                    root.arming = false;
-                    status.noteArmError(null);
+                armer.arm('the boot arm').then(() => {
                     ensureLoopbackGate();
                 }).catch((error) => {
-                    root.arming = false;
-                    status.noteArmError(error.message);
                     svc.warn(`root arm: ${error.message}`);
-                    if (attemptsLeft > 0) setTimeout(() => tryArm(attemptsLeft - 1), 30000);
+                    if (attemptsLeft > 0 && error.code !== 'armBudget') setTimeout(() => tryArm(attemptsLeft - 1), 30000);
                 });
             }
-            tryArm(5);
+            tryArm(2);
         }, 15000);
     }
 
