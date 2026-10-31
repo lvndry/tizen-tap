@@ -73,9 +73,11 @@ After many root-arm cycles (each arm spawns the dotnet agent under
 `sdbd-tarlauncher`), sdbd can enter a state where 26101 accepts TCP but
 every handshake is reset, for LAN and loopback clients alike. It
 survives unplug cold boots and Developer Mode toggles. Same signature is
-documented in theubusu/samsung-tv-root issue #15 (S90F, Tizen 9). It may
-self-expire; the TTL is unknown. The reported next-step cure is a Smart
-Hub reset. Practical rule: batch root work into few arm cycles.
+documented in theubusu/samsung-tv-root issue #15 (S90F, Tizen 9). On a
+CU7105 it outlasted a night with no arms; a factory reset cleared it (a
+Smart Hub reset is the other reported cure). The service now shares one arm
+between all callers and caps arms at 6 an hour, so agents retrying in a
+loop cannot get there; still, batch root work into few arm cycles.
 
 ## One session at a time
 

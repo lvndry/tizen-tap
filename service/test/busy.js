@@ -1,6 +1,7 @@
 'use strict';
 
-// A second POST /install while one runs: 409, Retry-After, and a body naming what is running.
+// A POST /install behind a running self-update: 409, Retry-After, and a body naming what is running.
+// Any other install waits its turn instead (test/pipeline.js).
 
 const http = require('http');
 const WebSocket = require('ws');
@@ -29,7 +30,7 @@ check('an install with no start time still asks for a wait', busyRetrySeconds(nu
 // 39s in, so the ask is 20s with a second of slack for the test itself.
 const startedAt = Date.now() - 39000;
 const store = createStore({
-    installing: { name: 'Bonsoir', phase: 'installing', startedAt },
+    installing: { name: 'Tizen Tap', self: true, phase: 'installing', startedAt },
     catalog: [],
     device: null
 });
@@ -113,20 +114,20 @@ server.listen(0, '127.0.0.1', async () => {
         check('with a Retry-After header', answer.headers['retry-after'] === '20', String(answer.headers['retry-after']));
         check('that matches retryAfterSeconds', body.retryAfterSeconds === 20, String(body.retryAfterSeconds));
         check('naming what is running',
-            body.installing && body.installing.name === 'Bonsoir' && body.installing.phase === 'installing',
+            body.installing && body.installing.name === 'Tizen Tap' && body.installing.phase === 'installing',
             JSON.stringify(body.installing));
         check('and since when',
             body.installing && body.installing.startedAt === new Date(startedAt).toISOString(),
             JSON.stringify(body.installing));
         check('the message says when to come back', /20s/.test(body.message), body.message);
         check('the running install is left alone',
-            store.select('installing') && store.select('installing').name === 'Bonsoir',
+            store.select('installing') && store.select('installing').name === 'Tizen Tap',
             JSON.stringify(store.select('installing')));
 
         const refused = await overSocket(port);
         check('the websocket install path refuses the same way',
             refused.code === 'installBusy' && refused.retryAfterSeconds === 20 &&
-            refused.installing && refused.installing.name === 'Bonsoir',
+            refused.installing && refused.installing.name === 'Tizen Tap',
             JSON.stringify(refused));
     } catch (error) {
         check('the harness ran', false, error.message);

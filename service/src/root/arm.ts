@@ -88,30 +88,102 @@ function injectionFor(manifest) {
 }
 // Fire the injection and wait for the agent to dial back in. sdbd double-
 // fires every injection, so the second agent simply loses the socket race
-// (the channel drops it). The sdb reply is not the authoritative signal —
-// the daemon answers the verb before the launcher has finished. What proves
-// root is the channel connecting with an agent that reports uid 0.
+// (the channel drops it). The sdb reply is not the authoritative signal: the
+// agent usually dials in while sdbd still holds the verb open, up to its 15 s
+// timeout. What proves root is the channel connecting with an agent that
+// reports uid 0, so that is watched from the moment the injection goes out;
+// waiting for the reply first let an install release the agent in between
+// and the arm report a failure that was a success.
+const ARM_DEADLINE_MS = 45000;
+
 function arm(sdb, channel, log) {
     log = log || (() => {});
     stage(log);
 
     log('root-arm: injecting');
-    return sdb.withSession({ host: '127.0.0.1' }, (session) =>
-        session.exec(injectionFor(manifest()), { timeout: 15000 }).catch((error) => {
-            log(`root-arm: sdb reply ${error.code || error.message}`);
-        })
-    ).then(() => new Promise((resolve, reject) => {
-        const deadline = Date.now() + 30000;
+    sdb.withSession({ host: '127.0.0.1' }, (session) =>
+        session.exec(injectionFor(manifest()), { timeout: 15000 })
+    ).catch((error) => {
+        log(`root-arm: sdb reply ${error.code || error.message}`);
+    });
+
+    return new Promise<any>((resolve, reject) => {
+        const deadline = Date.now() + ARM_DEADLINE_MS;
         function tick() {
             if (channel.connected) return resolve(channel.identity);
             if (Date.now() > deadline) return reject(new Error('root-arm: the agent never dialed back in'));
             setTimeout(tick, 500);
         }
         tick();
-    })).then((identity) => {
+    }).then((identity) => {
         log(`root-arm: root armed (uid ${identity.uid}, cap ${identity.capEff})`);
         return identity;
     });
 }
 
-module.exports = { manifest, stage, arm, VENDOR };
+// Every arm pushes an agent through sdbd, and enough of them in a row lock it
+// out until a factory reset (seen on a CU7105 after ~20 cycles in a day). So
+// the boot retries, the re-arm after an install and every client of
+// POST /dev/root/arm share one arm in flight, and injections are capped per
+// hour however many agents are asking.
+const ARM_BUDGET = 6;
+const ARM_WINDOW_MS = 60 * 60 * 1000;
+
+function createArmer({ sdb, channel, log, onOutcome = (_error: string | null) => {}, armOnce = arm,
+    budget = ARM_BUDGET, windowMs = ARM_WINDOW_MS, now = () => Date.now() }) {
+    let inFlight: Promise<any> | null = null;
+    const injections: number[] = [];
+
+    function recent() {
+        const at = now();
+        while (injections.length && at - injections[0] >= windowMs) injections.shift();
+        return injections.length;
+    }
+
+    function retryAfterSeconds() {
+        return injections.length ? Math.max(1, Math.ceil((injections[0] + windowMs - now()) / 1000)) : 0;
+    }
+
+    function request(reason: string) {
+        if (channel.status().root) return Promise.resolve(channel.status().identity);
+        if (inFlight) {
+            log(`root-arm: ${reason} joined the arm already in flight`);
+            return inFlight;
+        }
+
+        if (recent() >= budget) {
+            const wait = retryAfterSeconds();
+            return Promise.reject(Object.assign(new Error(
+                `root-arm: ${budget} arms in the last hour already, and sdbd locks out after too many; ` +
+                `the next one is allowed in ${wait}s`), { code: 'armBudget', retryAfterSeconds: wait }));
+        }
+
+        injections.push(now());
+        log(`root-arm: arming for ${reason} (${injections.length}/${budget} this hour)`);
+
+        inFlight = armOnce(sdb, channel, log).then((identity) => {
+            inFlight = null;
+            onOutcome(null);
+            return identity;
+        }, (error) => {
+            inFlight = null;
+            onOutcome(error.message);
+            throw error;
+        });
+        return inFlight;
+    }
+
+    function status() {
+        const used = recent();
+        return {
+            arming: !!inFlight,
+            armsThisHour: used,
+            budget,
+            nextArmInSeconds: used >= budget ? retryAfterSeconds() : 0
+        };
+    }
+
+    return { arm: request, status };
+}
+
+module.exports = { manifest, stage, arm, createArmer, VENDOR };
