@@ -91,4 +91,18 @@ async function probe() {
     };
 }
 
-module.exports = { probe, canReachSdb, platformVersion, onTv, RESIGN_REQUIRED_FROM };
+// The set's live power state from the Control API, e.g. 'on' or 'standby'.
+// Returns null when the set is not on a TV or the read cannot be made, so a
+// caller can treat "unknown" as "not on" without special-casing.
+async function powerState() {
+    if (!onTv) return null;
+
+    try {
+        const { device } = await getJson(DEVICE_API, { timeout: PROBE_TIMEOUT });
+        return typeof device.PowerState === 'string' ? device.PowerState : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+module.exports = { probe, canReachSdb, platformVersion, onTv, powerState, RESIGN_REQUIRED_FROM };
