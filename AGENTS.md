@@ -193,9 +193,13 @@ then `token.txt` is the key. Installing from a checkout of this repo is
   Control API answers 404 for it. If a root command is still running, the
   install waits up to a minute for it, then answers 409 `installBusy`.
 - **`/install` returns HTTP 100 / drops the socket** → the self-update path;
-  the connection dies mid-swap. `app.js` (as above) brings it back; the install
-  almost certainly succeeded — verify with `GET /version` (new build) and
-  `GET /packages`.
+  the platform kills the service mid-swap, and nothing on the TV restarts a
+  killed service. With the rescue installed it starts the new build by
+  itself: Tizen Tap opens the rescue just before installing, and the rescue
+  launches it once the swap is done (usually under a minute; its log says
+  `following tizen tap's self-update`). Without the rescue, `app.js` (as
+  above) brings it back. Either way, verify with `GET /version` (new build)
+  and `GET /packages`.
 - **Keys do nothing** → the TV is on a screen that ignores that key, or it is
   on standby. `node remote.js power` once, wait, retry. Do not assume the
   channel broke.

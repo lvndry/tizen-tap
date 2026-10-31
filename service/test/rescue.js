@@ -56,6 +56,11 @@ function memoryFs(initial = {}) {
             files.delete(from);
         },
         mkdirSync: () => {},
+        unlinkSync: (path) => {
+            if (!files.has(path)) throw missing(path);
+            ops.push(['unlink', path]);
+            files.delete(path);
+        },
         statSync: (path) => {
             if (!files.has(path)) throw missing(path);
             return { size: files.get(path).length, mtimeMs: 1761825600000 };
@@ -70,9 +75,10 @@ function memoryState() {
 }
 
 // `answers` is the sequence of probe results; the last one repeats.
-function rescueFor({ answers, installed = true, reinstallFails = false, key = 'copy-1', host = '192.168.1.119', state = memoryState(), bootId = 'boot-1' }) {
+function rescueFor({ answers, installed = true, reinstallFails = false, key = 'copy-1', host = '192.168.1.119', state = memoryState(), bootId = 'boot-1', timings = TIMINGS }) {
     const calls = { probes: 0, launches: [], reinstalls: 0, lines: [] };
     let queue = answers.slice();
+    let clock = 0;
 
     const rescue = createRescue({
         probe: async () => {
@@ -88,10 +94,11 @@ function rescueFor({ answers, installed = true, reinstallFails = false, key = 'c
         },
         lastGoodKey: () => key,
         state,
-        wait: async () => {},
+        wait: async (ms) => { clock += ms || 1; },
+        now: () => clock,
         log: (line) => calls.lines.push(line),
         bootId,
-        timings: TIMINGS
+        timings
     });
 
     return { rescue, calls, state, setAnswers: (next) => { queue = next.slice(); } };
@@ -453,8 +460,59 @@ async function statusReport() {
         'said something');
 }
 
+const FOLLOW = { reason: 'self-update', until: new Date(5 * 60 * 1000).toISOString() };
+const FOLLOW_TIMINGS = { ...TIMINGS, followPollMs: 2000, followQuietMs: 6000, followAfterLaunchMs: 15000 };
+
+async function followingRestarts() {
+    {
+        // Killed mid-install: answers, goes quiet, stays quiet until launched.
+        const { rescue, calls } = rescueFor({ answers: [BUILD, BUILD, null, null, null, null, null, 'new-build'], timings: FOLLOW_TIMINGS });
+        const outcome = await rescue.run({ follow: FOLLOW });
+        check('follow: a self-update killed mid-install is launched, again every 15 s, until it answers',
+            outcome === 'relaunched' && calls.launches.length >= 1 && calls.reinstalls === 0, JSON.stringify({ outcome, calls }));
+    }
+
+    {
+        const { rescue, calls } = rescueFor({ answers: [BUILD, null, 'new-build'], timings: FOLLOW_TIMINGS });
+        const outcome = await rescue.run({ follow: FOLLOW });
+        check('follow: a build that comes back by itself is left alone',
+            outcome === 'restarted' && calls.launches.length === 0, JSON.stringify({ outcome, calls }));
+    }
+
+    {
+        const { rescue, calls } = rescueFor({ answers: [BUILD], timings: FOLLOW_TIMINGS });
+        const outcome = await rescue.run({ follow: FOLLOW });
+        check('follow: an update that never happened ends at the deadline without launching anything',
+            outcome === 'no-restart' && calls.launches.length === 0, JSON.stringify({ outcome, launches: calls.launches }));
+    }
+
+    {
+        // Uninstalled and never back: the usual check reinstalls the last-good copy.
+        const { rescue, calls } = rescueFor({ answers: [BUILD, null], installed: false, timings: FOLLOW_TIMINGS });
+        const outcome = await rescue.run({ follow: FOLLOW });
+        check('follow: a package that never comes back falls through to the reinstall',
+            outcome === 'reinstalled-still-silent' && calls.reinstalls === 1, JSON.stringify({ outcome, reinstalls: calls.reinstalls }));
+    }
+
+    {
+        const fs = memoryFs();
+        lastgood.expectRestart(fs, 'self-update', 0);
+        const taken = lastgood.takeExpectedRestart(fs, 1000);
+        check('note: a fresh note is taken once', taken && taken.reason === 'self-update' &&
+            lastgood.takeExpectedRestart(fs, 1000) === null, JSON.stringify(taken));
+
+        lastgood.expectRestart(fs, 'self-update', 0);
+        check('note: an expired note is ignored', lastgood.takeExpectedRestart(fs, 10 * 60 * 1000) === null, 'taken');
+
+        lastgood.expectRestart(fs, 'self-update', 0);
+        lastgood.cancelExpectedRestart(fs);
+        check('note: a cancelled note is gone', !fs.existsSync(lastgood.EXPECT_RESTART), 'still there');
+    }
+}
+
 async function main() {
     await rescueDecisions();
+    await followingRestarts();
     await reinstallCommands();
     await keeperPromotion();
     await statusReport();

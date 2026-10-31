@@ -452,6 +452,32 @@ const run = async () => {
     }
 
     {
+        const told = [];
+        const selfRestart = { expect: () => told.push('expect'), cancel: () => told.push('cancel') };
+        const store = createStore({ installing: false, catalog: [] });
+        const { install } = createInstaller({
+            sdb: fakeSdb(), device: fakeDevice(), config: fakeConfig({ author: 'present' }),
+            resigner: fakeResigner, store, selfRestart
+        });
+
+        await install({ source: 'upload', upload: fixture.wgtWithIcon() });
+        check('a self-update tells the rescue before installing, since nothing else starts the new build',
+            told.join(',') === 'expect', told.join(','));
+
+        told.length = 0;
+        await install({ source: 'upload', upload: otherUploadFor('ACME000001') });
+        check('another package does not', told.length === 0, told.join(','));
+
+        told.length = 0;
+        const failing = createInstaller({
+            sdb: fakeSdb('install failed[118, -12]'), device: fakeDevice(), config: fakeConfig({ author: 'present' }),
+            resigner: fakeResigner, store, selfRestart
+        });
+        await failing.install({ source: 'upload', upload: fixture.wgtWithIcon() }).catch(() => {});
+        check('a self-update that fails withdraws the request', told.join(',') === 'expect,cancel', told.join(','));
+    }
+
+    {
         const { outcome, sdb } = await releasedInstall({ sdb: heldSdb(), upload: fixture.wgtWithIcon() });
         check('a self-update that sdb keeps turning away after the release never uninstalls the running copy',
             outcome.code === 'sdbUnreachable' && !sdb.calls.commands.some((c) => c.includes('vd_appuninstall')),

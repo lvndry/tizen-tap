@@ -5,6 +5,12 @@
 //   installed, service silent  launch the UI (its page starts the service)
 //   missing, or still silent   reinstall the last good copy, then launch
 //
+// Tizen Tap installing over itself is the other case: the platform kills it
+// mid-install and nothing starts the new build, so it asks the rescue to
+// follow the restart (see expectRestart in lastgood.ts). The rescue waits for
+// it to go quiet, launches it once its package is registered again, and falls
+// back to the check above if it never comes back.
+//
 // Bounded on purpose. One reinstall per boot, and a counter on disk of
 // reinstalls of the same copy that did not bring Tizen Tap back: a broken
 // last-good copy is tried MAX_FAILED_REINSTALLS times across boots and then
@@ -28,10 +34,14 @@ const TIMINGS = {
     retryMs: 30000,
     afterLaunchMs: 60000,
     lanPollMs: 15000,
-    lanPolls: 20
+    lanPolls: 20,
+    followPollMs: 2000,
+    followQuietMs: 6000,
+    followAfterLaunchMs: 15000
 };
 
-function createRescue({ probe, lanHost, appInstalled, launch, reinstall, lastGoodKey, state, wait, log, bootId, timings = TIMINGS }) {
+function createRescue({ probe, lanHost, appInstalled, launch, reinstall, lastGoodKey, state, wait, log, bootId,
+    timings = TIMINGS, now = () => Date.now() }) {
     const say = (message) => {
         try { log(message); } catch (e) {}
     };
@@ -148,8 +158,54 @@ function createRescue({ probe, lanHost, appInstalled, launch, reinstall, lastGoo
         return 'reinstalled-still-silent';
     }
 
+    // The old build answers until the install kills it; a launch while the package is still being
+    // replaced is refused or killed again, so the rescue waits for a few quiet seconds and repeats
+    // the launch until the new build answers.
+    async function followRestart({ reason, until }) {
+        const deadline = Date.parse(until);
+        const host = await waitForLan();
+
+        if (!host) {
+            say(`no LAN IPv4 address, so the ${reason} cannot be followed`);
+            return 'no-network';
+        }
+
+        say(`following tizen tap's ${reason}`);
+        let quietSince: number | null = null;
+        let launched = false;
+
+        while (now() < deadline) {
+            if (await probe(host)) {
+                if (quietSince !== null) {
+                    say(`tizen tap is back after its ${reason}`);
+                    healthy({ ...(state.read() || {}), bootId });
+                    return launched ? 'relaunched' : 'restarted';
+                }
+            } else {
+                if (quietSince === null) quietSince = now();
+
+                if (now() - quietSince >= timings.followQuietMs && appInstalled(TIZEN_TAP_APP_ID)) {
+                    await launch(TIZEN_TAP_APP_ID);
+                    launched = true;
+                    await wait(timings.followAfterLaunchMs);
+                    continue;
+                }
+            }
+
+            await wait(timings.followPollMs);
+        }
+
+        if (quietSince === null) {
+            say(`tizen tap never went quiet; its ${reason} did not happen`);
+            return 'no-restart';
+        }
+
+        say(`tizen tap did not come back from its ${reason}; checking it the usual way`);
+        return check({ manual: true });
+    }
+
     // A second request while a check runs is dropped: two checks would launch twice.
-    async function run(options = { manual: false }) {
+    async function run(options: { manual?: boolean, follow?: { reason: string, until: string } } = { manual: false }) {
         if (running) {
             say('a check is already running');
             return 'busy';
@@ -158,7 +214,7 @@ function createRescue({ probe, lanHost, appInstalled, launch, reinstall, lastGoo
         running = true;
 
         try {
-            const outcome = await check(options);
+            const outcome = options.follow ? await followRestart(options.follow) : await check({ manual: !!options.manual });
             say(`outcome: ${outcome}`);
             return outcome;
         } catch (error) {

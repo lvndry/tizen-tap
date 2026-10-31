@@ -80,7 +80,7 @@ async function waitUntil(done: () => boolean, timeoutMs: number) {
 }
 
 function createInstaller({ sdb, device, config, resigner, store, log, rootChannel = null as any, rearmRoot = null as any,
-    keepCandidate = null as any, queueWaitMs = QUEUE_WAIT_MS, rootIdleWaitMs = ROOT_IDLE_WAIT_MS }) {
+    keepCandidate = null as any, selfRestart = null as any, queueWaitMs = QUEUE_WAIT_MS, rootIdleWaitMs = ROOT_IDLE_WAIT_MS }) {
     const say = log ? log.on('pkg') : QUIET;
     const sdbSays = log ? log.on('sdb') : QUIET;
 
@@ -318,11 +318,25 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
             return { ...carried, route: 'sdb' };
         };
 
+        // The platform kills this process partway through installing over it, so something outside
+        // has to start the new build: the rescue is told first, and told again if nothing happened.
         const runInstaller = async (carried) => {
             const isSelf = carried.identity.packageId === SELF_PACKAGE_ID;
 
             phase('installing', carried.identity.name || carried.identity.packageId);
 
+            if (!isSelf || !selfRestart) return installByRoute(carried, isSelf);
+
+            selfRestart.expect();
+            try {
+                return await installByRoute(carried, isSelf);
+            } catch (error) {
+                selfRestart.cancel();
+                throw error;
+            }
+        };
+
+        const installByRoute = async (carried, isSelf) => {
             // The probe already saw sdb held, so it is not tried again before the release: a second
             // attempt would hang the same way.
             const { state } = carried;

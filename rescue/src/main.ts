@@ -15,7 +15,7 @@ const fs = require('fs');
 const sdb = require('../../service/src/tv/sdb.ts');
 const {
     RESCUE_DIR, RESCUE_LOG, RESCUE_STATE, RESCUE_PORT, LAST_GOOD, TIZEN_TAP_APP_ID, TIZEN_TAP_CONFIG,
-    writeAtomically, readJson, lanIpv4, probeVersion
+    writeAtomically, readJson, lanIpv4, probeVersion, takeExpectedRestart
 } = require('../../service/src/rescue/lastgood.ts');
 const { createRescue, createReinstall } = require('./rescue.ts');
 const { resolvePin, createGate, createInstall, createServer, createPinGate } = require('./server.ts');
@@ -152,16 +152,23 @@ function listen() {
     server.listen(RESCUE_PORT, '0.0.0.0', () => note(`listening on 0.0.0.0:${RESCUE_PORT}`));
 }
 
+// Tizen Tap opens the rescue just before installing over itself; the note it
+// left says so, and turns this start into following that restart.
+function runCheck(manual) {
+    const follow = takeExpectedRestart(fs);
+    rescue.run(follow ? { follow } : { manual });
+}
+
 function start() {
     note(`rescue ${BUILD} starting, pid ${process.pid}, node ${process.version}`);
 
     listen();
-    rescue.run({ manual: false });
+    runCheck(false);
 }
 
 module.exports.onStart = start;
 module.exports.onRequest = () => {
     note('manual request');
-    rescue.run({ manual: true });
+    runCheck(true);
 };
 module.exports.onExit = () => note('rescue service stopping');
