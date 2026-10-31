@@ -134,8 +134,14 @@ function arm(sdb, channel, log) {
 const ARM_BUDGET = 6;
 const ARM_WINDOW_MS = 60 * 60 * 1000;
 
+// An arm while an install runs takes sdbd's one session out from under it (seen live: the
+// install hung for its whole timeout), so an arm waits for the install to finish first.
+const INSTALL_WAIT_MS = 5 * 60 * 1000;
+const INSTALL_POLL_MS = 1000;
+
 function createArmer({ sdb, channel, log, onOutcome = (_error: string | null) => {}, armOnce = arm,
-    budget = ARM_BUDGET, windowMs = ARM_WINDOW_MS, now = () => Date.now() }) {
+    installing = () => false, budget = ARM_BUDGET, windowMs = ARM_WINDOW_MS, now = () => Date.now(),
+    wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
     let inFlight: Promise<any> | null = null;
     const injections: number[] = [];
 
@@ -166,7 +172,14 @@ function createArmer({ sdb, channel, log, onOutcome = (_error: string | null) =>
         injections.push(now());
         log(`root-arm: arming for ${reason} (${injections.length}/${budget} this hour)`);
 
-        inFlight = armOnce(sdb, channel, log).then((identity) => {
+        const afterInstall = async () => {
+            log('root-arm: waiting for the running install to finish');
+            const deadline = now() + INSTALL_WAIT_MS;
+            while (installing() && now() < deadline) await wait(INSTALL_POLL_MS);
+            return armOnce(sdb, channel, log);
+        };
+
+        inFlight = (installing() ? afterInstall() : armOnce(sdb, channel, log)).then((identity) => {
             inFlight = null;
             onOutcome(null);
             return identity;

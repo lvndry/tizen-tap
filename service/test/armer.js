@@ -79,6 +79,20 @@ const run = async () => {
         await after;
     }
 
+    {
+        let installing = true;
+        const order = [];
+        const { channel, status } = fakeChannel();
+        const armer = createArmer({
+            sdb: {}, channel: { status }, log: () => {}, installing: () => installing,
+            wait: async () => { order.push('waited'); installing = false; },
+            armOnce: async () => { order.push('injected'); channel.root = true; return IDENTITY; }
+        });
+        await armer.arm('another agent, mid-install');
+        check('an arm during an install waits for it to finish before injecting',
+            order.join(',') === 'waited,injected', order.join(','));
+    }
+
     const failed = results.filter((ok) => !ok).length;
     console.log(`\n${results.length - failed}/${results.length} checks passed.`);
     process.exit(failed ? 1 : 0);

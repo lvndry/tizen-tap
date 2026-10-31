@@ -284,7 +284,8 @@ function start() {
     });
 
     const armer = rootArm.createArmer({
-        sdb, channel, log: (line) => svc.info(line), onOutcome: (error) => status.noteArmError(error)
+        sdb, channel, log: (line) => svc.info(line), onOutcome: (error) => status.noteArmError(error),
+        installing: () => !!store.select('installing')
     });
 
     // See expectRestart in rescue/lastgood.ts. Without the rescue installed the launch is refused

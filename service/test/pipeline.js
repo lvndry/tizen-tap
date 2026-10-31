@@ -347,7 +347,7 @@ const run = async () => {
             withSession: (_options, run) => {
                 calls.count += 1;
                 if (calls.count <= succeedAfter) {
-                    return Promise.reject(Object.assign(new Error('127.0.0.1:26101 closed the connection before the ADB handshake completed.'), { code: 'sdbClosed' }));
+                    return Promise.reject(Object.assign(new Error('127.0.0.1:26101 closed the connection before the ADB handshake completed.'), { code: 'sdbClosed', isSdbError: true }));
                 }
                 return run({
                     exec: (command) => {
@@ -490,6 +490,24 @@ const run = async () => {
             outcome.code === 'installBusy' && /Retry once the root channel is idle/.test(outcome.message) &&
             channel.seen.released === 0 && channel.seen.commands.length === 0,
             `${outcome.code}: ${outcome.message}`);
+    }
+
+    {
+        const commands = [];
+        const timingOut = { withSession: (_options, run) => run({
+            exec: (command) => {
+                commands.push(command);
+                return Promise.reject(Object.assign(new Error('Command timed out after 180000ms'), { code: 'sdbTimeout', isSdbError: true }));
+            },
+            close: () => {}
+        }) };
+        const store = createStore({ installing: false, catalog: [] });
+        const { install } = createInstaller({
+            sdb: timingOut, device: fakeDevice(), config: fakeConfig({ author: 'present' }), resigner: fakeResigner, store
+        });
+        const outcome = await install({ source: 'upload', upload: fixture.wgtWithIcon() }).catch((e) => e);
+        check('a self-update whose install times out never uninstalls the running copy',
+            outcome.code === 'sdbTimeout' && !commands.some((c) => c.includes('vd_appuninstall')), JSON.stringify(commands));
     }
 
     {

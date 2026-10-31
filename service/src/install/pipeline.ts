@@ -265,15 +265,16 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
 
         // A self-update installs in place: sdbd overwrites the files, and the caller then exits
         // abnormally so auto-restart loads the new build. Uninstalling first removes the very
-        // process doing the installing, so it is only the fallback for an install sdbd ran and
-        // refused. sdbd turning the connection away is never that: it once got through on the
-        // uninstall's retry and left the TV with no Tizen Tap at all.
+        // process doing the installing, so it is only the fallback for the installer's own
+        // refusal. An sdb error (a reset, a closed handshake, a timeout) is never that: one got
+        // through on the uninstall's retry and left the TV with no Tizen Tap at all, and a
+        // timeout says nothing about whether the install ran.
         const installOverSdb = async (carried, isSelf) => {
             if (isSelf) {
                 try {
                     return await inPlaceOverSdb(carried);
                 } catch (error) {
-                    if (HELD_BY_ANOTHER_SESSION[error.code] || rootHoldsSdbd(error.code)) throw error;
+                    if (error.isSdbError) throw error;
                     sdbSays.info(`in place refused (${error.code || 'install failed'}), uninstalling the old copy first`);
                 }
             }
