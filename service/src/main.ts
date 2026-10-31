@@ -105,6 +105,14 @@ function isBootStart() {
 // afterwards: its server has been seen dying hours into a session, with
 // nothing to notice, so the start-time windows are backed by a periodic
 // sweep (see revive.ts).
+// A companion launch is only wanted on a waking set. The launch waits for the
+// Control API to report 'on' at this cadence and gives up when the set is
+// still not on: a missed launch is recovered by the next resume, while a
+// launch fired into standby is what the viewer sees as a flash of an app on
+// a black screen.
+const AWAIT_ON_POLL_MS = 2000;
+const AWAIT_ON_MS = 45_000;
+
 function reviveCompanions() {
     const companion = log.on(Facility.SVC);
 
@@ -113,7 +121,41 @@ function reviveCompanions() {
     // and the port would always read down.
     const watchdog = createWatchdog({ probe: makePortProbe(stremioLanHost), launch });
 
-    function launch(appId: string, name: string, label: string) {
+    // The set's real power state, straight from the Control API (the same
+    // source /dev/status shows). Only 'on' is a state where putting an app on
+    // the glass is wanted; any other state — or a read we cannot make — is
+    // treated as not on.
+    function setOn(): Promise<boolean> {
+        return device.powerState().then((state) => state === 'on').catch(() => false);
+    }
+
+    // Waits until the set reports 'on' or the window gives out. The first
+    // look is free (a start on a waking set usually lands 'on' at once), and
+    // the polls are cheap Control API reads, never app launches.
+    function waitUntilOn(label: string): Promise<boolean> {
+        const deadline = Date.now() + AWAIT_ON_MS;
+
+
+        function tick(): Promise<boolean> {
+            return setOn().then((on) => {
+                if (on) return true;
+                if (Date.now() >= deadline) {
+                    companion.info(`set not on (${label}) — skipping the launch until the next resume`);
+                    return false;
+                }
+                return new Promise<boolean>((done) => setTimeout(() => { done(tick()); }, AWAIT_ON_POLL_MS));
+            });
+        }
+
+        return tick();
+    }
+
+    // Every launch first waits for the set to be on, so a companion is never
+    // pulled to the front of a black screen.
+    async function launch(appId: string, name: string, label: string) {
+        const on = await waitUntilOn(label);
+        if (!on) return;
+
         // One source of truth for every relaunch this service fires: the ring
         // is what /dev/status serves, next to the diagnosis.
         noteLaunch(appId, label);
@@ -410,6 +452,16 @@ function start() {
     if (device.onTv) {
         const developer = require('./root/developer.ts');
         let gateEnsured = false;
+        // sdbd persists a lockout after many rejected handshakes, and every
+        // rejected dial feeds the counter — the arm loop must not keep
+        // re-dialing a rejecting sdbd on a fixed cadence. Transient resets
+        // (sdbd busy, mid-restart) keep the short retry; a clean handshake
+        // reject backs off exponentially (30 s → 5 min) and after
+        // HANDSHAKE_PAUSE_AFTER rejects in a row auto-arm pauses until a heal
+        // or a manual /dev/root/arm resumes it.
+        const HANDSHAKE_BACKOFF_MS = [30_000, 60_000, 120_000, 300_000];
+        const HANDSHAKE_PAUSE_AFTER = 3;
+        let consecutiveHandshakeRejects = 0;
         setTimeout(() => {
             function ensureLoopbackGate() {
                 if (gateEnsured) return;
@@ -421,10 +473,13 @@ function start() {
                     .then(() => {
                         // A self-heal restarts sdbd, which takes the channel
                         // with it; the gate is loopback now, so re-arm once.
-                        setTimeout(() => tryArm(2), 20000);
+                        // That attempt is the one the heal existed for, so it
+                        // is allowed even while the handshake pause is up.
+                        consecutiveHandshakeRejects = 0;
+                        setTimeout(() => tryArm(2, true), 20000);
                     });
             }
-            function tryArm(attemptsLeft) {
+            function tryArm(attemptsLeft, forceAfterHeal = false) {
                 if (root.channel.status().root) {
                     // The root agent lives under sdbd, so it survives a tizen-tap
                     // restart. A fresh process reconnects to it and would
@@ -433,15 +488,29 @@ function start() {
                     ensureLoopbackGate();
                     return;
                 }
+                if (consecutiveHandshakeRejects >= HANDSHAKE_PAUSE_AFTER && !forceAfterHeal) return;
                 root.arming = true;
                 rootArm.arm(sdb, root.channel, (line) => svc.info(line)).then(() => {
                     root.arming = false;
+                    consecutiveHandshakeRejects = 0;
                     status.noteArmError(null);
                     ensureLoopbackGate();
                 }).catch((error) => {
                     root.arming = false;
                     status.noteArmError(error.message);
                     svc.warn(`root arm: ${error.message}`);
+                    const rejected = /closed the connection before the ADB handshake/.test(error.message);
+                    if (rejected) {
+                        consecutiveHandshakeRejects += 1;
+                        if (consecutiveHandshakeRejects >= HANDSHAKE_PAUSE_AFTER) {
+                            svc.warn(`root arm: sdbd rejected ${consecutiveHandshakeRejects} handshakes in a row — the gate is likely not 127.0.0.1 or a lockout is persisted; auto-arm paused, POST /dev/root/arm to resume`);
+                            return;
+                        }
+                        const delay = HANDSHAKE_BACKOFF_MS[Math.min(consecutiveHandshakeRejects - 1, HANDSHAKE_BACKOFF_MS.length - 1)];
+                        svc.info(`root arm: handshake rejected — backing off ${Math.round(delay / 1000)} s before the next attempt`);
+                        setTimeout(() => tryArm(0), delay);
+                        return;
+                    }
                     if (attemptsLeft > 0) setTimeout(() => tryArm(attemptsLeft - 1), 30000);
                 });
             }
