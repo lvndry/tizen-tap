@@ -215,10 +215,17 @@ class RootChannel {
     get busy() { return this.pending.size > 0; }
 
     // The agent runs inside an sdbd session, and sdbd serves one session at a time, so the agent
-    // has to exit before anything else can use sdb. An agent that ignores SHUTDOWN loses its socket.
+    // has to exit before anything else can use sdb. SHUTDOWN closes the channel but has been seen
+    // to leave sdbd's session held (a CU7105 kept resetting sdb clients afterwards), while killing
+    // the agent's process frees it, so the agent is also told to kill itself a second later, after
+    // it has answered. An agent that ignores both loses its socket.
     release(timeoutMs = 5000) {
         if (!this.connected) return Promise.resolve();
 
+        const pid = this.identity ? this.identity.pid : 0;
+        if (Number.isInteger(pid) && pid > 1) {
+            this.exec(`(sleep 1; kill -9 ${pid}) >/dev/null 2>&1 &`, timeoutMs).catch(() => {});
+        }
         this.shutdown(timeoutMs).catch(() => {});
 
         return new Promise<void>((resolve) => {

@@ -451,6 +451,13 @@ const run = async () => {
         check('and is not re-armed here: the new build re-arms on its own start', rearms === 0, String(rearms));
     }
 
+    {
+        const { outcome, sdb } = await releasedInstall({ sdb: heldSdb(), upload: fixture.wgtWithIcon() });
+        check('a self-update that sdb keeps turning away after the release never uninstalls the running copy',
+            outcome.code === 'sdbUnreachable' && !sdb.calls.commands.some((c) => c.includes('vd_appuninstall')),
+            JSON.stringify({ code: outcome.code, commands: sdb.calls.commands }));
+    }
+
     for (const [label, upload] of [['a self-update', fixture.wgtWithIcon()], ['another package', otherUpload()]]) {
         const { outcome, channel } = await releasedInstall({ sdb: heldSdb(), upload, channel: fakeChannel({ busy: true }) });
         check(`${label} while a root command outlasts the wait is refused as busy, root left alone`,

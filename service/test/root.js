@@ -36,6 +36,7 @@ function eventually(poll, timeout = 2000) {
 function fakeAgent(port, { uid = 0, leavesOnShutdown = false } = {}) {
     return new Promise((resolve, reject) => {
         const socket = net.connect(port, '127.0.0.1');
+        socket.commands = [];
         let buffered = Buffer.alloc(0);
         let nonce = null;
 
@@ -48,6 +49,7 @@ function fakeAgent(port, { uid = 0, leavesOnShutdown = false } = {}) {
             if (verb === 'PING') return send(`PONG\t${theirSeq}\t${uid}\t${uid}\t0\t0`);
             if (verb === 'EXEC') {
                 const command = Buffer.from(parts[3], 'base64').toString('utf8');
+                socket.commands.push(command);
                 if (command === 'echo ok') return send(`RESULT\t${theirSeq}\t0\t0\t${Buffer.from('ok\n').toString('base64')}\t`);
                 if (command === 'exit 3') return send(`RESULT\t${theirSeq}\t3\t0\t\t${Buffer.from('boom\n').toString('base64')}`);
                 return send(`RESULT\t${theirSeq}\t1\t0\t\t${Buffer.from('no such command\n').toString('base64')}`);
@@ -71,7 +73,7 @@ function fakeAgent(port, { uid = 0, leavesOnShutdown = false } = {}) {
                     const parts = line.split('\t');
                     if (parts[0] !== PROTOCOL_VERSION) return reject(new Error('bad hello'));
                     nonce = Buffer.from(parts[1], 'hex');
-                    send(`AUTH\t1\t${uid}\t${uid}\t0\t0\t3fffffffff\t${Buffer.from('User').toString('base64')}`);
+                    send(`AUTH\t4242\t${uid}\t${uid}\t0\t0\t3fffffffff\t${Buffer.from('User').toString('base64')}`);
                     resolve(socket);
                     continue;
                 }
@@ -144,12 +146,14 @@ async function main() {
 
     // sdbd serves one session at a time and the agent holds one, so release() has to end it.
     {
-        await fakeAgent(port, { leavesOnShutdown: true });
+        const agent = await fakeAgent(port, { leavesOnShutdown: true });
         await eventually(() => channel.status().root);
         check('an idle channel is not busy', channel.busy === false, String(channel.busy));
 
         await channel.release(1000);
         check('release lets an agent that honours SHUTDOWN leave', channel.status().connected === false, '');
+        check('and has the agent kill its own process, which is what frees sdbd',
+            agent.commands.some((command) => /sleep 1; kill -9 4242\)/.test(command)), JSON.stringify(agent.commands));
     }
 
     {

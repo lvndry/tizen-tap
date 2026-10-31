@@ -67,7 +67,7 @@ const HELD_BY_ANOTHER_SESSION = { sdbClosed: true, sdbReset: true };
 const PROBE_HELD_BY_ANOTHER_SESSION = { ...HELD_BY_ANOTHER_SESSION, sdbTimeout: true };
 
 // sdbd takes a moment to notice its session's process is gone.
-const SDBD_SETTLE_MS = 1000;
+const SDBD_SETTLE_MS = 2000;
 
 function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -260,15 +260,16 @@ function createInstaller({ sdb, device, config, resigner, store, log, rootChanne
         };
 
         // A self-update installs in place: sdbd overwrites the files, and the caller then exits
-        // abnormally so auto-restart loads the new build. Uninstalling first would drop the
-        // connection, because this process runs out of the package being removed. Only a refusal
-        // that is not sdbd being held falls back to uninstall-then-install.
+        // abnormally so auto-restart loads the new build. Uninstalling first removes the very
+        // process doing the installing, so it is only the fallback for an install sdbd ran and
+        // refused. sdbd turning the connection away is never that: it once got through on the
+        // uninstall's retry and left the TV with no Tizen Tap at all.
         const installOverSdb = async (carried, isSelf) => {
             if (isSelf) {
                 try {
                     return await inPlaceOverSdb(carried);
                 } catch (error) {
-                    if (rootHoldsSdbd(error.code)) throw error;
+                    if (HELD_BY_ANOTHER_SESSION[error.code] || rootHoldsSdbd(error.code)) throw error;
                     sdbSays.info(`in place refused (${error.code || 'install failed'}), uninstalling the old copy first`);
                 }
             }
