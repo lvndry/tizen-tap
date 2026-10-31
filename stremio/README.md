@@ -18,11 +18,11 @@ pure-JS WebTorrent on Tizen's Node 18, zero native modules, cache capped at
 - **Revives itself.** The Tizen Tap service probes port 11470 on every
   start (at 3 s and 60 s) and launches this app if the port is silent, so a
   dead server comes back the next time anything touches homebrew.
-- **Bounded disk use.** The torrent cache lives under
-  `/home/owner/.stremio-server` and is capped at 512 MB (TVs have ~4 GB
-  total). If that path is not writable it falls back to the system temp
-  dir, which the TV reclaims more aggressively — the cache is still capped
-  either way.
+- **Bounded disk use.** The torrent cache lives on flash and is capped at
+  512 MB (TVs have ~4 GB total). The server's own cap only trims torrents
+  that have finished playing, so the shim also trims the cache to the cap
+  at every start and, while it runs, removes old torrents whenever the TV
+  drops below 600 MB free. The torrent playing is never touched.
 
 ## Setup (one time, ~5 minutes)
 
@@ -118,13 +118,16 @@ The torrent cache lives in that data path too, on flash, capped at 1 GB
 (512 MB by default). It must not live in `/tmp`: on Tizen that is tmpfs, so
 a cache there is RAM taken from every app, and a 2 GB cache in `/tmp` is
 how a streaming session starts the out-of-memory killer. The shim puts the
-cache back on flash and re-applies the cap on every boot.
+cache back on flash and re-applies the cap on every boot. The cap alone does
+not bound the film being watched, which grows to its full size; `space.js`
+is what keeps that from filling the TV.
 
 ## Layout
 
 | File | |
 | --- | --- |
 | `main.js` | Service entry: pins the port, data dir, cache cap, then loads the server bundle |
+| `space.js` | Trims the cache to its cap at start and keeps 600 MB free while running |
 | `src/server.js` | Stremio's official desktop server bundle (v4.21.2), unmodified |
 | `index.html` | Page that starts the service via `launchAppControl` and exits |
 | `config.xml` | Widget manifest; `application.launch` privilege is what lets the page start the service |
