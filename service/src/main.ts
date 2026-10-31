@@ -54,6 +54,7 @@ const ui = require('./routes/ui.ts');
 const rootRoutes = require('./routes/root.ts');
 const { RootChannel } = require('./root/channel.ts');
 const rootArm = require('./root/arm.ts');
+const { ensureWatchdog } = require('./root/watchdog.ts');
 const { makePortProbe, createWatchdog, stremioLanHost } = require('./revive.ts');
 const { noteLaunch } = require('./launches.ts');
 const { createKeeper, keepCandidate, probeVersion, lanIpv4, expectRestart, cancelExpectedRestart, RESCUE_APP_ID } = require('./rescue/lastgood.ts');
@@ -474,6 +475,7 @@ function start() {
     if (device.onTv) {
         const developer = require('./root/developer.ts');
         let gateEnsured = false;
+        let watchdogEnsured = false;
         // sdbd persists a lockout after many rejected handshakes, and every
         // rejected dial feeds the counter — the arm loop must not keep
         // re-dialing a rejecting sdbd on a fixed cadence. Transient resets
@@ -485,6 +487,14 @@ function start() {
         const HANDSHAKE_PAUSE_AFTER = 3;
         let consecutiveHandshakeRejects = 0;
         setTimeout(() => {
+            function ensureWatchdogNow() {
+                if (watchdogEnsured) return;
+                watchdogEnsured = true;
+                ensureWatchdog({
+                    exec: (command, timeoutMs) => root.channel.exec(command, timeoutMs),
+                    log: (line) => svc.info(line)
+                }).catch((error) => svc.warn(`watchdog: ${error.message}`));
+            }
             function ensureLoopbackGate() {
                 if (gateEnsured) return;
                 gateEnsured = true;
@@ -508,12 +518,14 @@ function start() {
                     // otherwise return here without ever healing the gate —
                     // which is exactly the case the self-heal exists for.
                     ensureLoopbackGate();
+                    ensureWatchdogNow();
                     return;
                 }
                 if (consecutiveHandshakeRejects >= HANDSHAKE_PAUSE_AFTER && !forceAfterHeal) return;
                 armer.arm('the boot arm').then(() => {
                     consecutiveHandshakeRejects = 0;
                     ensureLoopbackGate();
+                    ensureWatchdogNow();
                 }).catch((error) => {
                     svc.warn(`root arm: ${error.message}`);
                     if (error.code === 'armBudget') return;
