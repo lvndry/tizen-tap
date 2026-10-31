@@ -33,7 +33,7 @@ function preview(source) {
 }
 
 function register(ctx, router) {
-    const { sdb, root } = ctx;
+    const { root } = ctx;
 
     function gate(request, response) {
         const verdict = ctx.authorise(request.headers['x-homebrew-pin'], request.socket && request.socket.remoteAddress);
@@ -56,31 +56,34 @@ function register(ctx, router) {
 
     router.on.get('/dev/root', (request, response) => {
         if (!gate(request, response)) return;
-                json(response, root.channel.status());
+        json(response, { ...root.channel.status(), arms: root.armer.status() });
     });
 
     router.on.post('/dev/root/arm', async (request, response) => {
         if (!gate(request, response)) return;
 
-                if (root.channel.status().root) return json(response, { ok: true, already: true, identity: root.channel.status().identity });
-        if (root.arming) return json(response, { ok: false, error: 'an arm is already in progress' });
+        if (root.channel.status().root) return json(response, { ok: true, already: true, identity: root.channel.status().identity });
 
-        ctx.svc.warn(`root arm from ${host(request.socket && request.socket.remoteAddress)}`);
-        root.arming = true;
+        // A second caller waits on the arm in flight and gets its answer, rather than being told
+        // to come back and firing another injection.
+        const caller = host(request.socket && request.socket.remoteAddress);
+        ctx.svc.warn(`root arm from ${caller}`);
         try {
-            const identity = await ctx.rootArm(sdb, root.channel, (line) => ctx.svc.info(line));
+            const identity = await root.armer.arm(`POST /dev/root/arm from ${caller}`);
             json(response, { ok: true, identity });
         } catch (error) {
+            if (error.code === 'armBudget') {
+                response.setHeader('Retry-After', String(error.retryAfterSeconds));
+                return json(response, { ok: false, code: error.code, error: error.message, retryAfterSeconds: error.retryAfterSeconds }, 429);
+            }
             json(response, { ok: false, error: error.message });
-        } finally {
-            root.arming = false;
         }
     });
 
     router.on.post('/dev/root/exec', async (request, response) => {
         if (!gate(request, response)) return;
 
-                const status = root.channel.status();
+        const status = root.channel.status();
         if (!status.root) {
             return json(response, { ok: false, error: 'root channel is not connected; arm first' });
         }

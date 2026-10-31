@@ -72,6 +72,21 @@ loopback — while that socket is open, `POST /dev/root/exec` is a root shell.
 It re-arms after every power cycle; if it is not connected, call
 `POST /dev/root/arm` (PIN-gated). See [docs/sdbd-and-root.md](docs/sdbd-and-root.md).
 
+### Several agents at once
+
+Two agents can drive the same TV without coordinating. Root commands run side
+by side. A second install waits in line on the service and lands after the
+first (up to 3 minutes in line), so `POST /install` simply takes longer.
+Every arm, whether from boot, the re-arm after an install, or any number of
+clients calling `POST /dev/root/arm`, joins the one already in flight, so
+calling it while another agent arms is safe: you get that arm's answer.
+Arms are capped at 6 an hour, because each one pushes an agent through sdbd
+and enough of them lock it out until a factory reset; past the cap the route
+answers 429 with `Retry-After`, and `GET /dev/root` shows `arms` with
+`armsThisHour` and `nextArmInSeconds`. Do not poll-and-re-arm in a loop.
+What still collides is changing shared state: `POST /dev/root/developer-ip`
+and `POST /restart` affect every agent, so do not call them in passing.
+
 A 403 means the PIN is wrong; `GET /pin` (from the TV itself) or the
 PIN relay is how you get the current one. It is minted once at first start
 and kept across restarts, so cache it. Five wrong guesses lock out **the
@@ -96,7 +111,8 @@ probing anything by hand. Examples of what it says:
 - `"sdbd is up but rejects the handshake. Two causes: (1) stale gate: the running sdbd
   loaded the developer IP at restart and it is not 127.0.0.1; (2) a persisted lockout from
   many arm cycles. Toggle Developer Mode off/on to restart sdbd; …"`
-- `"root channel is not armed — POST /dev/root/arm."`
+- `"root channel is not armed — POST /dev/root/arm."` (or, past the hourly
+  arm cap, when the next arm is allowed)
 - `"Everything looks healthy."`
 
 Probe caveats baked in (learned the hard way): the developer IP is only read
@@ -154,12 +170,14 @@ then `token.txt` is the key. Installing from a checkout of this repo is
   `endedCleanly: false` means that run left no exit record (killed, e.g. by
   the out-of-memory killer, or power loss), and `tail` is the last thing it
   said. `/dev/status` repeats the verdict as `previousRun`.
-- **`/install` returns 409 `installBusy`** → another client's install is
-  running (one at a time: a self-update restarts the service mid-flight). The
-  body names it (`installing: { name, phase, startedAt }`). Wait
-  `Retry-After` seconds (10 to 30) and send the same request again; this is
-  not a failure of your package. Do not `POST /restart` to clear it, that
-  kills the other client's install.
+- **`/install` returns 409 `installBusy`** → the install ahead of yours is a
+  self-update (it restarts the service, so nothing can wait behind it) or the
+  line took longer than 3 minutes. Any other concurrent install just waits
+  its turn. The body names what is running (`installing: { name, phase,
+  startedAt }`). Wait `Retry-After` seconds (10 to 30) and send the same
+  request again; `npm run install-app` does this by itself. This is not a
+  failure of your package. Do not `POST /restart` to clear it, that kills
+  the other client's install.
 - **429 `lockedOut`** → this device sent five wrong PINs. Wait `Retry-After`,
   refresh the PIN (`GET /pin` or the relay), retry once. Other clients are
   not affected.
@@ -173,7 +191,7 @@ then `token.txt` is the key. Installing from a checkout of this repo is
   start). It never installs through root with `pkgcmd`: that puts the files
   on disk but skips the app manager, so the app gets no drawer icon and the
   Control API answers 404 for it. If a root command is still running, the
-  install is refused with 409 `installBusy`; retry when it finishes.
+  install waits up to a minute for it, then answers 409 `installBusy`.
 - **`/install` returns HTTP 100 / drops the socket** → the self-update path;
   the connection dies mid-swap. `app.js` (as above) brings it back; the install
   almost certainly succeeded — verify with `GET /version` (new build) and

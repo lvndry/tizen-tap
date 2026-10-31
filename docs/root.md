@@ -172,8 +172,10 @@ channel is down, because every arm cycle counts toward the lockout below.
 
 The root channel itself is cheap, but each arm cycle pushes a signed agent
 through sdbd. After ~18-30 cycles sdbd can hit a persisted handshake
-lockout (see [sdbd-and-root.md](sdbd-and-root.md)). Queue the work first,
-then arm once and run everything in the one window.
+lockout (see [sdbd-and-root.md](sdbd-and-root.md)). The service caps arms
+at 6 an hour (`POST /dev/root/arm` answers 429 past that) and lets every
+caller share the arm in flight. Queue the work first, then arm once and run
+everything in the one window.
 
 ## What root does not do
 
