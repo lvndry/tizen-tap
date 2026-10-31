@@ -88,27 +88,34 @@ function injectionFor(manifest) {
 }
 // Fire the injection and wait for the agent to dial back in. sdbd double-
 // fires every injection, so the second agent simply loses the socket race
-// (the channel drops it). The sdb reply is not the authoritative signal —
-// the daemon answers the verb before the launcher has finished. What proves
-// root is the channel connecting with an agent that reports uid 0.
+// (the channel drops it). The sdb reply is not the authoritative signal: the
+// agent usually dials in while sdbd still holds the verb open, up to its 15 s
+// timeout. What proves root is the channel connecting with an agent that
+// reports uid 0, so that is watched from the moment the injection goes out;
+// waiting for the reply first let an install release the agent in between
+// and the arm report a failure that was a success.
+const ARM_DEADLINE_MS = 45000;
+
 function arm(sdb, channel, log) {
     log = log || (() => {});
     stage(log);
 
     log('root-arm: injecting');
-    return sdb.withSession({ host: '127.0.0.1' }, (session) =>
-        session.exec(injectionFor(manifest()), { timeout: 15000 }).catch((error) => {
-            log(`root-arm: sdb reply ${error.code || error.message}`);
-        })
-    ).then(() => new Promise((resolve, reject) => {
-        const deadline = Date.now() + 30000;
+    sdb.withSession({ host: '127.0.0.1' }, (session) =>
+        session.exec(injectionFor(manifest()), { timeout: 15000 })
+    ).catch((error) => {
+        log(`root-arm: sdb reply ${error.code || error.message}`);
+    });
+
+    return new Promise<any>((resolve, reject) => {
+        const deadline = Date.now() + ARM_DEADLINE_MS;
         function tick() {
             if (channel.connected) return resolve(channel.identity);
             if (Date.now() > deadline) return reject(new Error('root-arm: the agent never dialed back in'));
             setTimeout(tick, 500);
         }
         tick();
-    })).then((identity) => {
+    }).then((identity) => {
         log(`root-arm: root armed (uid ${identity.uid}, cap ${identity.capEff})`);
         return identity;
     });
