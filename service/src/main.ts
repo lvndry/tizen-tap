@@ -4,7 +4,7 @@
 //
 // Composition root. It opens the pairing/health HTTP server on :8091, the
 // root channel on loopback :8092 (see root/, and AGENTS.md "The HTTP
-// surface"), revives the companions it watches (stremio, bonsoir), wires
+// surface"), revives the Stremio server it watches, wires
 // the install pipeline (fetch from the origin baked at build time, re-sign,
 // install over loopback sdb), and on a television arms the root channel
 // itself, with retries, once the sdb probe settles. Routes live in routes/*,
@@ -73,39 +73,17 @@ try {
     require('fs').appendFileSync(bootLog, `start ${new Date().toISOString()} pid=${process.pid}\n`);
 } catch (e) {}
 
-// A start within a few minutes of the TV's own boot is a boot start; later
-// starts are updates or manual relaunches. /proc/uptime is the TV's own
-// clock, so no NTP is involved.
-function isBootStart() {
-    try {
-        const uptime = Number(require('fs').readFileSync('/proc/uptime', 'utf8').split(' ')[0]);
-        return uptime < 180;
-    } catch (e) {
-        return false;
-    }
-}
 
-// Companions this service keeps alive on the TV, in launch order:
+// The companion this service keeps alive: the Stremio server, which does not
+// come up on its own after a cold boot and is what keeps a torrent stream
+// alive when the Mac is off. Every start checks it twice, immediately and a
+// minute later, because the services boot in parallel and the first look can
+// race the other start. A periodic sweep (see revive.ts) keeps checking: the
+// server has been seen dying hours into a session.
 //
-//   stremio  — its server does not come up on its own after a cold boot, and
-//              it is the thing that keeps a torrent stream alive when the
-//              Mac is off, so a down server means a broken stream.
-//   bonsoir  — the TV's front door. It is the default screen, so it must be
-//              the first thing on the glass after the set wakes, which means
-//              it comes back on every start of this service: a standby
-//              resume re-runs this handler in the same process (the bootlog
-//              shows repeated same-pid starts), and a cold boot fires it via
-//              on-boot. The late post-launcher windows, which only matter
-//              against the boot launcher stealing focus, stay gated to boot
-//              starts so an update restart does not chase the screen for
-//              four minutes.
-//
-// Every start of this service walks the list; each companion checks twice —
-// immediately, then a minute later — because the services boot in parallel
-// and the first look can race the other start. Stremio keeps being checked
-// afterwards: its server has been seen dying hours into a session, with
-// nothing to notice, so the start-time windows are backed by a periodic
-// sweep (see revive.ts).
+// Nothing else is put on screen. Bonsoir used to be brought to the front on
+// every start as the TV's default screen; the owner dropped that, so the set
+// keeps whatever it was showing.
 // A companion launch is only wanted on a waking set. The launch waits for the
 // Control API to report 'on' at this cadence and gives up when the set is
 // still not on: a missed launch is recovered by the next resume, while a
@@ -173,24 +151,12 @@ function reviveCompanions() {
         }
     }
 
-    function schedule(revive: (label: string) => Promise<void>, windows: ReadonlyArray<readonly [number, string]> = [[3000, 'first check'], [60_000, 'second check']]) {
-        for (const [delay, label] of windows) {
-            setTimeout(async () => { await revive(label); }, delay);
-        }
+    // Through the watchdog's guarded check: a slow probe cannot stack a second
+    // launch, and the 60 s sweep keeps the server alive after this start is
+    // long over.
+    for (const [delay, label] of [[3000, 'first check'], [60_000, 'second check']] as const) {
+        setTimeout(() => { watchdog.check(label); }, delay);
     }
-
-    // The default windows, through the watchdog's guarded check: a slow
-    // probe cannot stack a second launch, and the 60 s sweep keeps the
-    // server alive after this start is long over.
-    schedule((label) => watchdog.check(label));
-
-    // Every start puts the dashboard back on the glass — standby resume
-    // included, since that is how the set is actually turned on. The late
-    // windows only win the boot-launcher focus race, so they are boot-only.
-    schedule((label) => Promise.resolve(launch('BonsoirTV1.Bonsoir', 'bonsoir', label)),
-        isBootStart()
-            ? [[3000, 'early check'], [60_000, 'second check'], [120_000, 'post-launcher relaunch'], [240_000, 'late relaunch']]
-            : [[3000, 'early check'], [60_000, 'second check']]);
 }
 
 
