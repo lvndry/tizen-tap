@@ -33,8 +33,8 @@ else does.
 - **Root re-arms after every power cycle** via a sdb injection that runs
   the signed agent under sdbd's privileges. If the channel drops for
   another reason (a wgt self-install does), `POST /dev/root/arm`.
-- **Stremio and Bonsoir revive** — the service probes their ports on
-  every start and on a 60 s sweep, and relaunches whatever is silent.
+- **The Stremio server revives** — the service probes its port on every
+  start and on a 60 s sweep, and relaunches it when it is silent.
 - **`GET /dev/status` says when something didn't heal** instead of
   leaving you to find out.
 

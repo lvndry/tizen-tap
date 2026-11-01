@@ -28,7 +28,7 @@ modern Samsung smart TV with Developer Mode.</sub>
   your phone, a USB stick, or a direct URL. Each package is re-signed for
   your TV in about 150 ms.
 - Watches installed services and relaunches them. The root channel re-arms
-  after every power cycle, and Stremio and Bonsoir are revived on a 60 s
+  after every power cycle, and the Stremio server is revived on a 60 s
   sweep.
 - Updates itself from its own catalog entry, in place, without killing the
   service that runs the install.

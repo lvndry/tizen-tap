@@ -71,9 +71,8 @@ pressed a key on the remote. Both services keep running without them.
 On the CU7105 an earlier `GET /dev/status` showed memory pressure as
 critical: about 207 MB free of 1578 MB, with swap exhausted. That is the
 state in which the kernel reaps sideloaded services like this one. Note
-that every start of the service also launches Bonsoir (`BonsoirTV1.Bonsoir`)
-and, if its port is silent, the Stremio server, so a start adds its own
-load.
+that every start of the service also launches the Stremio server if its
+port is silent, so a start adds its own load.
 
 Memory was not the cause of the outage below, though: during it the TV had
 513 MB available. Check it before blaming memory (see "How to tell").
