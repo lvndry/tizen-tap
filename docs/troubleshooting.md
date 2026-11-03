@@ -302,15 +302,22 @@ Two traps while chasing this:
 
 The fix is a shell loop running as a **root systemd service** in the system
 namespace, where `stability-monitor` does not reach. Every 20 s it checks the
-Tizen Tap service (`:8091`) and the Stremio server (`:11470`); an app counts
-as down only when its port is closed *and* the Control API agrees it is not
-running, and it relaunches through the Control API with a per-app 90 s
-cooldown, so a slow start (~10 s to open its port) is not relaunched on every
-pass — that spam is what made the setup screen flicker in the first place. It
-also prunes the Stremio stream cache past 800 MB, guarded by a file-count
-stability check so it never deletes a segment still landing; the cache had
-reached 1.25 GB before the first prune, which is also what the "storage
-almost full" warning was about.
+Tizen Tap service (`:8091`) and the Stremio server (`:11470`). Liveness is
+**the port, and only the port**: the Control API's `running` flag tracks the
+app's *page* process, which can stay alive after the web service it started
+has died, so a port-closed app was once reported "running" and the watchdog
+sat on it for over an hour. A closed port means down, full stop. Relaunch is
+**stop-then-launch** — a bare launch is a no-op while the Control API still
+believes the app is running — so the watchdog first DELETEs the app (which
+also kills a wedged page process) and then POSTs a fresh launch, with a
+per-app 90 s cooldown so a slow start (~10 s to open its port) is not
+relaunched on every pass; that spam is what made the setup screen flicker in
+the first place. The Stremio server is the one exception to the stop: a
+healthy, playing server is only ever launched, never stopped, so a live
+stream is never interrupted by a relaunch. It also prunes the Stremio stream
+cache past 800 MB, guarded by a file-count stability check so it never
+deletes a segment still landing; the cache had reached 1.25 GB before the
+first prune, which is also what the "storage almost full" warning was about.
 
 ### The three Tizen traps the install falls into
 
