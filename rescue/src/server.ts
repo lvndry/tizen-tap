@@ -86,6 +86,10 @@ function createInstall({ readConfig, resign = null as any, stage = installer.sta
         const phase = (line) => { phases.push(line); say(`install: ${line}`); };
 
         try {
+            if (!upload || upload.length === 0) {
+                throw refuse('badPackage', 'No package body received. POST the .wgt file as the request body.');
+            }
+
             const identity = (() => {
                 try {
                     return identify(upload);
